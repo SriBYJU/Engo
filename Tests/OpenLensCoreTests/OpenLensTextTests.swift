@@ -157,6 +157,24 @@ final class OpenLensTextTests: XCTestCase {
         }
     }
 
+    func testNavigationAutofitIncludesCompleteStreetName() {
+        let direction = "Turn left onto North Parham Road and continue to West Broad Street"
+        let selected = OpenLensText.bestFittingSize(direction, preferred: .large)
+        XCTAssertNotEqual(selected, .large)
+        let pages = OpenLensText.pages(direction, size: selected)
+        XCTAssertEqual(pages.count, 1,
+            "Auto-fit should fit complete road names on the first page whenever possible")
+        let shown = pages.flatMap { $0 }.joined()
+        XCTAssertTrue(shown.contains("Broad Street") || shown.replacingOccurrences(of: " ", with: "").contains("BroadStreet"))
+        XCTAssertEqual(shown.filter { !$0.isWhitespace },
+                       direction.filter { !$0.isWhitespace })
+    }
+
+    func testNavigationAutofitRespectsUserPreferredSmallSize() {
+        let direction = "Turn onto Broad Street"
+        XCTAssertEqual(OpenLensText.bestFittingSize(direction, preferred: .small), .small)
+    }
+
     func testCardsJSONRoundTrip() throws {
         let card = OpenLensCard(title: "Meeting", body: "Remember the intro")
         let payload = try JSONEncoder().encode([card])
