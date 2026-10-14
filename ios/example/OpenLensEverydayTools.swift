@@ -5,32 +5,30 @@ import ActiveLookSDK
 
 /// Common ENGO 3 text canvas. Never silently chop off a line mid-word.
 enum OpenLensCanvas {
-    /// Font 0 is the SDK's 24px face (font 2 used 35px and caused clipping).
-    /// Text stays in a conservative optical safe area; no full-width divider.
-    static func show(_ glasses: Glasses, title: String, lines: [String]) {
+    /// The 304x256 microdisplay supports three different hardware font sizes.
+    /// Text uses the current size's wrapping and baseline spacing; no line is
+    /// cut to a hard-coded global width.
+    static func show(_ glasses: Glasses, title: String, lines: [String], size: OpenLensTextSize = .selected) {
         glasses.clear()
         let header = OpenLensText.sanitize(title).uppercased()
-        let h = OpenLensOrientation.origin(
-            x: OpenLensDisplayGeometry.defaultTextX,
-            y: OpenLensDisplayGeometry.headerY
-        )
-        glasses.txt(x: h.x, y: h.y, rotation: OpenLensOrientation.rotation, font: 0, color: 15,
-                    string: String(header.prefix(OpenLensText.lineWidth)))
-        for (index, line) in lines.prefix(OpenLensText.linesPerPage).enumerated() {
+        // Keep the section label small and short so the readable body has room.
+        let heading = OpenLensOrientation.origin(x: 42, y: 42)
+        glasses.txt(x: heading.x, y: heading.y, rotation: OpenLensOrientation.rotation,
+                    font: 0, color: 15, string: String(header.prefix(14)))
+        for (index, line) in lines.prefix(size.linesPerPage).enumerated() {
             let at = OpenLensOrientation.origin(
-                x: OpenLensDisplayGeometry.defaultTextX,
-                y: OpenLensDisplayGeometry.bodyStartY + index * OpenLensDisplayGeometry.bodyLineSpacing
+                x: 42,
+                y: size.firstLineY + index * size.lineSpacing
             )
             glasses.txt(x: at.x, y: at.y, rotation: OpenLensOrientation.rotation,
-                        font: 0, color: 15,
-                        string: String(OpenLensText.sanitize(line).prefix(OpenLensText.lineWidth)))
+                        font: size.fontID, color: 15,
+                        string: String(OpenLensText.sanitize(line).prefix(size.charactersPerLine)))
         }
     }
-    static func show(_ glasses: Glasses, title: String, message: String) {
-        show(glasses, title: title, lines: OpenLensText.pages(message)[0])
+    static func show(_ glasses: Glasses, title: String, message: String, size: OpenLensTextSize = .selected) {
+        show(glasses, title: title, lines: OpenLensText.pages(message, size: size)[0], size: size)
     }
 }
-
 /// Saved locally: no cloud or server needed.
 enum OpenLensCardLibrary {
     static let key = "openlens.cards.v1"
