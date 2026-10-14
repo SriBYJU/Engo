@@ -10,6 +10,28 @@ OpenLens builds on the official ActiveLook iOS demo / ActiveLookSDK v4.5.5. The 
 - Photo sizes are **Small 160×96**, **Medium 208×144**, **Large 240×192 (default)** and **Full 304×240**. The preview simulates actual screen coverage. Fit/fill, invert, 180-degree rotation, 1-bit high contrast/dither or 4-bit compressed grayscale remain available. Images are not deleted immediately.
 - Added basic transfer-error feedback for SDK flow-control conditions. No new cloud service is required for local display.
 
+## Crash regression: RGB image assertion
+On 2026-10-14 a physical iPhone debug session stopped in the vendor
+`ActiveLookSDK/UIImage+ActiveLook.swift` method `getPixels()` at
+`assert(cgImage.colorSpace?.model == .rgb)` when sending text as a
+monochrome bitmap. OpenLens now calls `OpenLensRGBImage.normalize`
+before `imgStream1bpp`, constructing an explicit 8-bit RGBA DeviceRGB
+CGImage and verifying its color model, bits-per-pixel, component depth,
+and data provider before sending. It sends nothing if that check fails.
+
+The SDK also packs the image into many BLE commands, so OpenLens now
+leaves at least eight seconds between full-size text-frame transfers.
+This is a precaution rather than proof that every BLE packet arrives.
+
+**On-device regression:** with ENGO 3 powered on and the updated app
+running under Xcode, tap Text > Show on Glasses with `HELLO` first.
+Verify there is **no debugger stop or app crash** and the glasses stay
+connected. Then test `Hey my name is Shree`, followed by page changes.
+If the app still breaks, copy the exact topmost Xcode error and report
+whether the *physical glasses* actually powered off or only disconnected.
+Stop the debug session (square button) before retrying. Do not modify
+or flash firmware from this test app.
+
 ## Physical ENGO 3 tests (required)
 1. On a Mac, open `ios/example.xcworkspace` after running `pod install` in `ios`.
 2. Choose an iPhone signed to your Apple Personal Team. Run with Command+R.
