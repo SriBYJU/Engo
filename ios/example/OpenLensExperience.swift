@@ -327,7 +327,7 @@ final class OpenLensDeviceSettingsViewController: UIViewController {
     }
     private func testOrientation() {
         OpenLensCanvas.show(glasses, title: "ALIGN TEST",
-                            lines: ["THIS WAY UP", "12345678901234", "LEFT  CENTER", "BOTTOM ROW"])
+                            lines: ["THIS WAY UP", "123456789012", "LEFT  CENTER", "BOTTOM ROW"])
         status.text = "Test queued with the 24px font and safe margins. Adjust text position until all four rows are visible."
     }
     private func updatePositionLabel() {
