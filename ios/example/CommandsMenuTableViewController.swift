@@ -159,6 +159,7 @@ final class OpenLensHUDViewController: UIViewController, CLLocationManagerDelega
     private var request: SFSpeechAudioBufferRecognitionRequest?
     private var speechTask: SFSpeechRecognitionTask?
     private var listening = false
+    private var speechTapInstalled = false
     private var transcript = ""
     private var lastUpdate = Date.distantPast
     private let modes = ["TEXT", "CAPTIONS", "AI"]
@@ -514,7 +515,12 @@ final class OpenLensHUDViewController: UIViewController, CLLocationManagerDelega
         relayExplanation.isHidden = i != 2
         fullResponse.isHidden = i != 2 || latestAIResponse.isEmpty
         resultUtilities.isHidden = i != 2 || latestAIResponse.isEmpty
-        if i == 2 { send.setTitle(aiTask == "general" ? "Ask AI" : (aiTaskButton.configuration?.title ?? "Ask AI"), for: .normal) }
+        if i == 2 {
+            let labels = ["general": "Ask AI", "explain": "Explain concept",
+                          "summarize": "Summarize text", "rewrite": "Rewrite clearly",
+                          "brainstorm": "Brainstorm ideas"]
+            send.setTitle(labels[aiTask] ?? "Ask AI", for: .normal)
+        }
         relayRequestID += 1
         relayTask?.cancel()
         relayTask = nil
@@ -637,6 +643,7 @@ final class OpenLensHUDViewController: UIViewController, CLLocationManagerDelega
             try session.setActive(true)
             let node = audioEngine.inputNode
             node.installTap(onBus: 0, bufferSize: 1024, format: node.outputFormat(forBus: 0)) { buffer, _ in req.append(buffer) }
+            speechTapInstalled = true
             audioEngine.prepare()
             try audioEngine.start()
             listening = true
@@ -664,7 +671,14 @@ final class OpenLensHUDViewController: UIViewController, CLLocationManagerDelega
                 }
             }
         } catch {
-            audioEngine.inputNode.removeTap(onBus: 0)
+            if audioEngine.isRunning { audioEngine.stop() }
+            if speechTapInstalled {
+                audioEngine.inputNode.removeTap(onBus: 0)
+                speechTapInstalled = false
+            }
+            req.endAudio()
+            request = nil
+            try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
             status.text = "Microphone: " + error.localizedDescription
         }
     }
@@ -673,7 +687,10 @@ final class OpenLensHUDViewController: UIViewController, CLLocationManagerDelega
         guard listening else { return }
         listening = false
         if audioEngine.isRunning { audioEngine.stop() }
-        audioEngine.inputNode.removeTap(onBus: 0)
+        if speechTapInstalled {
+            audioEngine.inputNode.removeTap(onBus: 0)
+            speechTapInstalled = false
+        }
         request?.endAudio()
         speechTask?.cancel()
         speechTask = nil
