@@ -139,6 +139,8 @@ final class OpenLensPresenterViewController: UIViewController {
     private let initialTitle: String
     private let initialBody: String
     private let editor = UITextView()
+    private let textSizeControl = UISegmentedControl(items: OpenLensTextSize.allCases.map(\.name))
+    private let sizeSummary = LensUI.label("", size: 13, color: LensUI.muted)
     private let pageInfo = UILabel()
     private let preview = UILabel()
     private let status = UILabel()
@@ -169,6 +171,13 @@ final class OpenLensPresenterViewController: UIViewController {
         editor.heightAnchor.constraint(equalToConstant: 160).isActive = true
         editor.accessibilityLabel = "Script to present"
         content.addArrangedSubview(editor)
+        content.addArrangedSubview(LensUI.section("Size on glasses", detail: "Larger text is easier to read, and the script is split into more pages."))
+        textSizeControl.selectedSegmentTintColor = LensUI.accent
+        textSizeControl.selectedSegmentIndex = OpenLensTextSize.selected.rawValue
+        textSizeControl.addTarget(self, action: #selector(textSizeChanged), for: .valueChanged)
+        content.addArrangedSubview(textSizeControl)
+        content.addArrangedSubview(sizeSummary)
+        updateSizeSummary()
         content.addArrangedSubview(LensUI.button("Prepare pages", icon: "doc.text") { [weak self] in self?.prepare() })
         pageInfo.text = "No pages prepared"
         pageInfo.textColor = LensUI.accent
@@ -202,19 +211,38 @@ final class OpenLensPresenterViewController: UIViewController {
         if !initialBody.isEmpty { prepare() }
     }
     override func viewWillDisappear(_ animated: Bool) { super.viewWillDisappear(animated); stopAuto() }
+    private func updateSizeSummary() {
+        let size = OpenLensTextSize.selected
+        sizeSummary.text = "\(size.name) · \(size.fontHeight)px · \(size.charactersPerLine) characters/line · \(size.linesPerPage) lines/page"
+    }
+    @objc private func textSizeChanged() {
+        guard let size = OpenLensTextSize(rawValue: textSizeControl.selectedSegmentIndex) else { return }
+        OpenLensTextSize.selected = size
+        updateSizeSummary()
+        if !editor.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { prepare() }
+    }
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        if textSizeControl.selectedSegmentIndex != OpenLensTextSize.selected.rawValue {
+            textSizeControl.selectedSegmentIndex = OpenLensTextSize.selected.rawValue
+            updateSizeSummary()
+            if !editor.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { prepare() }
+        }
+    }
+
     private func prepare() {
         stopAuto()
         editor.resignFirstResponder()
         let script = editor.text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !script.isEmpty else { status.text = "Enter your notes first."; return }
-        pages = OpenLensText.pages(script)
+        pages = OpenLensText.pages(script, size: .selected)
         current = 0
         render()
     }
     private func render() {
         guard pages.indices.contains(current) else { return }
         let lines = pages[current]
-        let heading = "\(initialTitle.prefix(12)) \(current + 1)/\(pages.count)"
+        let heading = "\(initialTitle.prefix(8)) \(current + 1)/\(pages.count)"
         OpenLensCanvas.show(glasses, title: heading, lines: lines)
         pageInfo.text = "PAGE \(current + 1) OF \(pages.count)"
         preview.text = lines.joined(separator: "\n")
