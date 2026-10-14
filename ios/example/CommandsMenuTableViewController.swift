@@ -155,6 +155,7 @@ import Speech
 import AVFoundation
 import MapKit
 import CoreLocation
+import Security
 
 final class OpenLensHUDViewController: UIViewController, CLLocationManagerDelegate {
     private let glasses: Glasses
@@ -399,6 +400,8 @@ final class OpenLensHUDViewController: UIViewController, CLLocationManagerDelega
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try? JSONSerialization.data(withJSONObject: ["mode": mode, "text": text, "target_language": targetLanguage])
+        request.timeoutInterval = 25
+        if let token = loadRelayToken() { request.setValue("Bearer " + token, forHTTPHeaderField: "Authorization") }
         status.text = mode == "translate" ? "Translating text..." : "Waiting for AI response..."
         URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
             let code = (response as? HTTPURLResponse)?.statusCode ?? 0
@@ -495,13 +498,46 @@ final class OpenLensHUDViewController: UIViewController, CLLocationManagerDelega
         callRelay(mode: "translate", text: text, targetLanguage: translationLanguage)
     }
 
+    private func saveRelayToken(_ token: String) {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: "OpenLens-ENGO3",
+            kSecAttrAccount as String: "relay-token"
+        ]
+        SecItemDelete(query as CFDictionary)
+        if !token.isEmpty, let data = token.data(using: .utf8) {
+            var item = query
+            item[kSecValueData as String] = data
+            SecItemAdd(item as CFDictionary, nil)
+        }
+    }
+
+    private func loadRelayToken() -> String? {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: "OpenLens-ENGO3",
+            kSecAttrAccount as String: "relay-token",
+            kSecMatchLimit as String: kSecMatchLimitOne,
+            kSecReturnData as String: true
+        ]
+        var result: CFTypeRef?
+        guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess,
+              let data = result as? Data else { return nil }
+        return String(data: data, encoding: .utf8)
+    }
+
     private func configureRelay() {
-        let alert = UIAlertController(title: "Private AI relay", message: "Paste your HTTPS relay URL, not an API key.", preferredStyle: .alert)
+        let alert = UIAlertController(title: "Private AI/translation relay", message: "Paste your HTTPS relay URL and its separate client token. Never paste your OpenAI API key.", preferredStyle: .alert)
         alert.addTextField {
             $0.placeholder = "https://example.com/openlens"
             $0.text = UserDefaults.standard.string(forKey: "openlens.relay")
             $0.autocapitalizationType = .none
             $0.keyboardType = .URL
+        }
+        alert.addTextField {
+            $0.placeholder = "Client token"
+            $0.isSecureTextEntry = true
+            $0.text = self.loadRelayToken()
         }
         alert.addAction(UIAlertAction(title: "Save", style: .default) { _ in
             let input = alert.textFields?.first?.text ?? ""
@@ -510,6 +546,7 @@ final class OpenLensHUDViewController: UIViewController, CLLocationManagerDelega
                 return
             }
             UserDefaults.standard.set(input, forKey: "openlens.relay")
+            self.saveRelayToken(alert.textFields?.last?.text ?? "")
             self.status.text = input.isEmpty ? "AI relay cleared." : "AI relay saved."
         })
         alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
