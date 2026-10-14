@@ -38,6 +38,7 @@
 		A1B2C3D4E5F60718293A4B5F /* OpenLensText.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B5E /* OpenLensText.swift */; };
 		A1B2C3D4E5F60718293A4B61 /* OpenLensEverydayTools.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B60 /* OpenLensEverydayTools.swift */; };
 		A1B2C3D4E5F60718293A4B63 /* OpenLensMapRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B62 /* OpenLensMapRenderer.swift */; };
+		A1B2C3D4E5F60718293A4B65 /* OpenLensReadTextViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B64 /* OpenLensReadTextViewController.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -76,6 +77,7 @@
 		A1B2C3D4E5F60718293A4B5E /* OpenLensText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenLensText.swift; sourceTree = "<group>"; };
 		A1B2C3D4E5F60718293A4B60 /* OpenLensEverydayTools.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenLensEverydayTools.swift; sourceTree = "<group>"; };
 		A1B2C3D4E5F60718293A4B62 /* OpenLensMapRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenLensMapRenderer.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F60718293A4B64 /* OpenLensReadTextViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenLensReadTextViewController.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -118,6 +120,7 @@
                 A1B2C3D4E5F60718293A4B5C /* OpenLensExperience.swift */,
                 A1B2C3D4E5F60718293A4B60 /* OpenLensEverydayTools.swift */,
                 A1B2C3D4E5F60718293A4B62 /* OpenLensMapRenderer.swift */,
+                A1B2C3D4E5F60718293A4B64 /* OpenLensReadTextViewController.swift */,
                 A1B2C3D4E5F60718293A4B5E /* OpenLensText.swift */,
 				2307D97C2732C1CB000732DC /* CommandsTableViewController.swift */,
 				2307D9842732C1CB000732DC /* ConfigurationCommandsViewController.swift */,
@@ -315,6 +318,7 @@
                 A1B2C3D4E5F60718293A4B5D /* OpenLensExperience.swift in Sources */,
                 A1B2C3D4E5F60718293A4B61 /* OpenLensEverydayTools.swift in Sources */,
                 A1B2C3D4E5F60718293A4B63 /* OpenLensMapRenderer.swift in Sources */,
+                A1B2C3D4E5F60718293A4B65 /* OpenLensReadTextViewController.swift in Sources */,
                 A1B2C3D4E5F60718293A4B5F /* OpenLensText.swift in Sources */,
 				2307D98C2732C1CB000732DC /* StatisticsCommandsViewController.swift in Sources */,
 			);
