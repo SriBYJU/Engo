@@ -61,6 +61,26 @@ public enum OpenLensText {
         }
     }
 
+    /// Floyd–Steinberg dithering for black-and-white display previews.
+    /// Every output pixel is exactly 0 or 255, suitable for the SDK 1bpp encoder.
+    public static func dither(_ luminance: [Double], width: Int) -> [UInt8] {
+        guard width > 0, !luminance.isEmpty else { return [] }
+        var values = luminance.map { max(0, min(255, $0)) }
+        var result = [UInt8](repeating: 0, count: values.count)
+        for i in values.indices {
+            let x = i % width
+            let white = values[i] >= 127.5
+            let output = white ? 255.0 : 0.0
+            result[i] = white ? 255 : 0
+            let error = values[i] - output
+            if x + 1 < width && i + 1 < values.count { values[i + 1] += error * 7 / 16 }
+            if x > 0 && i + width - 1 < values.count { values[i + width - 1] += error * 3 / 16 }
+            if i + width < values.count { values[i + width] += error * 5 / 16 }
+            if x + 1 < width && i + width + 1 < values.count { values[i + width + 1] += error / 16 }
+        }
+        return result
+    }
+
     public static func countdown(_ remaining: TimeInterval) -> String {
         let seconds = max(0, Int(remaining.rounded(.up)))
         let minutes = seconds / 60
