@@ -1,9 +1,9 @@
 import Foundation
 
 /// Pure Foundation rendering primitives shared by the iOS client and SwiftPM tests.
-/// Built-in ActiveLook fonts: 0 = 24px, 2 = 35px, 3 = 49px.
-/// A larger font intentionally fits fewer letters and lines on a 304×256 HUD.
-/// All message text is preserved across pages rather than shortened.
+/// OpenLens renders words into a 1-bit image using the *working photo path*.
+/// The legacy SDK's native text commands caused rotated/clipped fragments.
+/// Sizes are real UIKit bitmap font sizes, not the old SDK font indices.
 public enum OpenLensTextSize: Int, CaseIterable {
     case small = 0, medium = 1, large = 2
 
@@ -14,49 +14,38 @@ public enum OpenLensTextSize: Int, CaseIterable {
         case .large: return "Large"
         }
     }
-    public var fontID: UInt8 {
-        switch self {
-        case .small: return 0
-        case .medium: return 2
-        case .large: return 3
-        }
-    }
     public var fontHeight: Int {
         switch self {
-        case .small: return 24
-        case .medium: return 35
-        case .large: return 49
+        case .small: return 30
+        case .medium: return 42
+        case .large: return 56
         }
     }
-    /// Conservative layout widths account for the widest hardware glyphs.
+    /// Conservative character limits for a monospaced UIKit font in 304px.
+    /// The renderer additionally verifies actual measured width before drawing.
     public var charactersPerLine: Int {
         switch self {
-        case .small: return 12
-        case .medium: return 9
-        case .large: return 6
+        case .small: return 15
+        case .medium: return 11
+        case .large: return 8
         }
     }
     public var linesPerPage: Int {
         switch self {
-        case .small: return 4
-        case .medium: return 3
-        case .large: return 2
+        case .small: return 6
+        case .medium: return 4
+        case .large: return 3
         }
     }
-    public var firstLineY: Int {
-        switch self {
-        case .small: return 84
-        case .medium: return 90
-        case .large: return 101
-        }
-    }
+    public var firstLineY: Int { 8 }
     public var lineSpacing: Int {
         switch self {
-        case .small: return 35
-        case .medium: return 49
-        case .large: return 64
+        case .small: return 39
+        case .medium: return 54
+        case .large: return 72
         }
     }
+
     private static let key = "openlens.display.textSize"
     public static var selected: OpenLensTextSize {
         get {
@@ -178,6 +167,12 @@ public struct OpenLensCard: Codable, Equatable, Identifiable {
 public enum OpenLensDisplayGeometry {
     public static let screenWidth = 304
     public static let screenHeight = 256
+    /// One full-screen streamed bitmap, centrally placed like a photo.
+    public static let textImageWidth = 304
+    public static let textImageHeight = 240
+    public static let textImageX = 0
+    public static let textImageY = 8
+    public static let textInset = 10
     public static let defaultTextX = 48
     public static let headerY = 40
     public static let bodyStartY = 88
