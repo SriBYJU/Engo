@@ -52,6 +52,7 @@ class GlassesTableViewController: UITableViewController {
     private var connecting: Bool = false
     private weak var scanStatus: UILabel?
     private var scannedThisSession = false
+    private var ignoreNextDisconnect = false
     
     
     // MARK: - Life cycle
@@ -131,20 +132,28 @@ class GlassesTableViewController: UITableViewController {
                 }
                 DispatchQueue.main.async {
                     self.tableView.deselectRow(at: indexPath, animated: true)
-                    self.navigationController?.pushViewController(OpenLensHomeViewController(glasses), animated: true)
+                    self.navigationController?.pushViewController(
+                        OpenLensHomeViewController(glasses, beforeDisconnect: { [weak self] in
+                            self?.ignoreNextDisconnect = true
+                        }), animated: true)
                 }
             }, onGlassesDisconnected: { [weak self] in
-                guard let self = self else { return }
-                self.connecting = false
-                self.connectionTimer?.invalidate()
-
-                let alert = UIAlertController(title: "Glasses disconnected", message: "Connection to glasses lost", preferredStyle: .alert)
-                alert.addAction(UIAlertAction(title: "OK", style: .default, handler: { (_) in
-                    self.navigationController?.popToRootViewController(animated: true)
-                }))
-                
-                DispatchQueue.main.async { self.navigationController?.present(alert, animated: true) }
-                
+                DispatchQueue.main.async {
+                    guard let self = self else { return }
+                    self.connecting = false
+                    self.connectionTimer?.invalidate()
+                    if self.ignoreNextDisconnect {
+                        self.ignoreNextDisconnect = false
+                        return
+                    }
+                    let alert = UIAlertController(title: "Glasses disconnected",
+                                                  message: "Bluetooth connection lost. Scan again to reconnect.",
+                                                  preferredStyle: .alert)
+                    alert.addAction(UIAlertAction(title: "OK", style: .default, handler: { _ in
+                        self.navigationController?.popToRootViewController(animated: true)
+                    }))
+                    self.navigationController?.present(alert, animated: true)
+                }
             }, onConnectionError: { [weak self] (error: Error) in
                 guard let self = self else { return }
                 
