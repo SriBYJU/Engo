@@ -247,6 +247,8 @@
 			outputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-example/Pods-example-frameworks-${CONFIGURATION}-output-files.xcfilelist",
 			);
+			outputPaths = (
+			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
 			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-example/Pods-example-frameworks.sh\"\n";
