@@ -250,6 +250,8 @@ final class OpenLensHomeViewController: UIViewController {
 final class OpenLensDeviceSettingsViewController: UIViewController {
     private let glasses: Glasses
     private let orientation = UISegmentedControl(items: ["Normal", "Rotated 180°"])
+    private let textSizeControl = UISegmentedControl(items: OpenLensTextSize.allCases.map(\.name))
+    private let textSizeDetail = LensUI.label("", size: 13, color: LensUI.muted)
     private let brightness = UISlider()
     private let autoBrightness = UISwitch()
     private let gestures = UISwitch()
@@ -269,6 +271,13 @@ final class OpenLensDeviceSettingsViewController: UIViewController {
         super.viewDidLoad()
         title = "Glasses settings"
         let content = LensUI.stack(in: view)
+        content.addArrangedSubview(LensUI.section("Text size", detail: "Choose readable 24px, 35px or 49px lettering. Larger settings automatically split long text into more pages."))
+        textSizeControl.selectedSegmentIndex = OpenLensTextSize.selected.rawValue
+        textSizeControl.selectedSegmentTintColor = LensUI.accent
+        textSizeControl.addTarget(self, action: #selector(textSizeChanged), for: .valueChanged)
+        content.addArrangedSubview(textSizeControl)
+        content.addArrangedSubview(textSizeDetail)
+        updateTextSizeDetail()
         content.addArrangedSubview(LensUI.section("Display orientation", detail: "Switch if text appears upside down, then tap Test."))
         orientation.selectedSegmentIndex = OpenLensOrientation.isRotated ? 1 : 0
         orientation.selectedSegmentTintColor = LensUI.accent
@@ -321,14 +330,25 @@ final class OpenLensDeviceSettingsViewController: UIViewController {
         return LensUI.card(row)
     }
 
+    private func updateTextSizeDetail() {
+        let size = OpenLensTextSize.selected
+        textSizeDetail.text = "\(size.name) • \(size.fontHeight)px • \(size.linesPerPage) lines per page"
+    }
+    @objc private func textSizeChanged() {
+        guard let size = OpenLensTextSize(rawValue: textSizeControl.selectedSegmentIndex) else { return }
+        OpenLensTextSize.selected = size
+        updateTextSizeDetail()
+        testOrientation()
+    }
+
     @objc private func orientationChanged() {
         OpenLensOrientation.isRotated = orientation.selectedSegmentIndex == 1
         status.text = "Orientation preference saved. Tap Show orientation test."
     }
     private func testOrientation() {
-        OpenLensCanvas.show(glasses, title: "ALIGN TEST",
-                            lines: ["THIS WAY UP", "123456789012", "LEFT  CENTER", "BOTTOM ROW"])
-        status.text = "Test queued with the 24px font and safe margins. Adjust text position until all four rows are visible."
+        let size = OpenLensTextSize.selected
+        OpenLensCanvas.show(glasses, title: "SIZE TEST", message: "OPENLENS READ ME", size: size)
+        status.text = "Queued \(size.name) \(size.fontHeight)px alignment test. Check text size and position through your glasses."
     }
     private func updatePositionLabel() {
         positionLabel.text = "Text offset: horizontal \(OpenLensOrientation.horizontalOffset) px, vertical \(OpenLensOrientation.verticalOffset) px"
