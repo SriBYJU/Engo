@@ -183,6 +183,19 @@ final class OpenLensHUDViewController: UIViewController, CLLocationManagerDelega
     private let relaySetup = UIButton(type: .system)
     private let relayCheck = UIButton(type: .system)
     private let relayExplanation = UILabel()
+    private let aiTaskButton = UIButton(type: .system)
+    private let translateButton = UIButton(type: .system)
+    private let fullResponse = UITextView()
+    private let copyResponse = UIButton(type: .system)
+    private let saveResponse = UIButton(type: .system)
+    private let clearCaptions = UIButton(type: .system)
+    private let copyCaptions = UIButton(type: .system)
+    private let aiUtilities = UIStackView()
+    private let resultUtilities = UIStackView()
+    private let captionsUtilities = UIStackView()
+    private var aiTask = "general"
+    private var latestAIResponse = ""
+    private var relayRequestID = 0
     private var relayTask: URLSessionDataTask?
 
     init(_ glasses: Glasses, initialMode: Int = 0) {
@@ -191,6 +204,143 @@ final class OpenLensHUDViewController: UIViewController, CLLocationManagerDelega
         super.init(nibName: nil, bundle: nil)
     }
     required init?(coder: NSCoder) { fatalError("Use init(glasses)") }
+
+    private func setupAIUtilities() {
+        aiTaskButton.configuration = .bordered()
+        aiTaskButton.configuration?.title = "AI action: Answer a question ▾"
+        aiTaskButton.configuration?.image = UIImage(systemName: "sparkles")
+        aiTaskButton.configuration?.imagePadding = 8
+        aiTaskButton.accessibilityHint = "Choose Answer, Explain, Summarize, Rewrite, or Brainstorm"
+        let tasks: [(label: String, key: String)] = [
+            ("Answer a question", "general"),
+            ("Explain a concept", "explain"),
+            ("Summarize text", "summarize"),
+            ("Rewrite clearly", "rewrite"),
+            ("Brainstorm ideas", "brainstorm")
+        ]
+        aiTaskButton.menu = UIMenu(title: "Choose an AI action", children: tasks.map { task in
+            UIAction(title: task.label) { [weak self] _ in
+                guard let self = self else { return }
+                self.aiTask = task.key
+                self.aiTaskButton.configuration?.title = "AI action: \(task.label) ▾"
+                self.status.text = task.key == "general"
+                    ? "Type a question, then tap Ask AI."
+                    : "Enter the content or topic, then tap \(task.label)."
+                self.send.setTitle(task.key == "general" ? "Ask AI" : task.label, for: .normal)
+            }
+        })
+        aiTaskButton.showsMenuAsPrimaryAction = true
+
+        translateButton.configuration = .bordered()
+        translateButton.configuration?.title = "Translate text…"
+        translateButton.configuration?.image = UIImage(systemName: "globe")
+        translateButton.configuration?.imagePadding = 8
+        translateButton.addTarget(self, action: #selector(translateInput), for: .touchUpInside)
+
+        aiUtilities.axis = .vertical
+        aiUtilities.spacing = 10
+        aiUtilities.addArrangedSubview(aiTaskButton)
+        aiUtilities.addArrangedSubview(translateButton)
+        aiUtilities.isHidden = true
+
+        fullResponse.isEditable = false
+        fullResponse.isSelectable = true
+        fullResponse.textColor = .white
+        fullResponse.backgroundColor = UIColor(white: 0.12, alpha: 1)
+        fullResponse.layer.cornerRadius = 14
+        fullResponse.font = .preferredFont(forTextStyle: .body)
+        fullResponse.textContainerInset = UIEdgeInsets(top: 14, left: 12, bottom: 14, right: 12)
+        fullResponse.heightAnchor.constraint(equalToConstant: 185).isActive = true
+        fullResponse.accessibilityLabel = "Full AI answer"
+        fullResponse.isHidden = true
+
+        copyResponse.configuration = .bordered()
+        copyResponse.configuration?.title = "Copy answer"
+        copyResponse.configuration?.image = UIImage(systemName: "doc.on.doc")
+        copyResponse.addTarget(self, action: #selector(copyAIAnswer), for: .touchUpInside)
+        saveResponse.configuration = .bordered()
+        saveResponse.configuration?.title = "Save as quick card"
+        saveResponse.configuration?.image = UIImage(systemName: "bookmark")
+        saveResponse.addTarget(self, action: #selector(saveAIAnswer), for: .touchUpInside)
+        resultUtilities.axis = .horizontal
+        resultUtilities.spacing = 10
+        resultUtilities.distribution = .fillEqually
+        resultUtilities.addArrangedSubview(copyResponse)
+        resultUtilities.addArrangedSubview(saveResponse)
+        resultUtilities.isHidden = true
+    }
+
+    private func setupCaptionUtilities() {
+        clearCaptions.configuration = .bordered()
+        clearCaptions.configuration?.title = "Clear captions"
+        clearCaptions.addTarget(self, action: #selector(clearCaptionText), for: .touchUpInside)
+        copyCaptions.configuration = .bordered()
+        copyCaptions.configuration?.title = "Copy transcript"
+        copyCaptions.addTarget(self, action: #selector(copyCaptionText), for: .touchUpInside)
+        captionsUtilities.axis = .horizontal
+        captionsUtilities.distribution = .fillEqually
+        captionsUtilities.spacing = 10
+        captionsUtilities.addArrangedSubview(clearCaptions)
+        captionsUtilities.addArrangedSubview(copyCaptions)
+        captionsUtilities.isHidden = true
+    }
+
+    @objc private func copyAIAnswer() {
+        guard !latestAIResponse.isEmpty else { return }
+        UIPasteboard.general.string = latestAIResponse
+        status.text = "Complete answer copied to clipboard."
+    }
+
+    @objc private func saveAIAnswer() {
+        guard !latestAIResponse.isEmpty else { return }
+        let question = field.text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let title = question.isEmpty ? "Saved AI answer" : String(question.prefix(60))
+        var cards = OpenLensCardLibrary.load()
+        cards.insert(OpenLensCard(title: title, body: String(latestAIResponse.prefix(2000))), at: 0)
+        OpenLensCardLibrary.save(cards)
+        status.text = "AI answer saved to Quick cards on this iPhone."
+    }
+
+    @objc private func clearCaptionText() {
+        stopSpeech(submit: false)
+        transcript = ""
+        fullMessage = ""
+        fullHeading = ""
+        field.text = ""
+        visiblePages = []
+        preview.image = OpenLensCanvas.render(lines: ["CAPTIONS CLEARED"])
+        pageCounter.text = "Transcript cleared"
+        OpenLensCanvas.cancelPending()
+        glasses.clear()
+        status.text = "Captions cleared. Tap Start listening to resume."
+    }
+
+    @objc private func copyCaptionText() {
+        let text = transcript.isEmpty ? field.text ?? "" : transcript
+        guard !text.isEmpty else { status.text = "No captions to copy yet."; return }
+        UIPasteboard.general.string = text
+        status.text = "Transcript copied to clipboard."
+    }
+
+    @objc private func translateInput() {
+        let text = field.text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else {
+            status.text = "Type or dictate something before translating."
+            return
+        }
+        let options = UIAlertController(title: "Translate into", message: "Select a language to translate the entered text.", preferredStyle: .actionSheet)
+        for (label, code) in [("English", "en"), ("Spanish", "es"), ("French", "fr"), ("Hindi", "hi"), ("Telugu", "te")] {
+            options.addAction(UIAlertAction(title: label, style: .default) { [weak self] _ in
+                guard let self = self else { return }
+                self.translationLanguage = code
+                self.callRelay(mode: "translate", text: text, targetLanguage: code)
+            })
+        }
+        options.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        options.popoverPresentationController?.sourceView = translateButton
+        options.popoverPresentationController?.sourceRect = translateButton.bounds
+        present(options, animated: true)
+    }
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -287,6 +437,8 @@ final class OpenLensHUDViewController: UIViewController, CLLocationManagerDelega
         relayExplanation.textColor = .lightGray
         relayExplanation.font = .systemFont(ofSize: 13)
         relayExplanation.text = "Connect a private Cloudflare relay before AI or translation can work."
+        setupAIUtilities()
+        setupCaptionUtilities()
         let sizeTitle = UILabel()
         sizeTitle.text = "TEXT SIZE ON GLASSES"
         sizeTitle.textColor = accent
@@ -295,7 +447,13 @@ final class OpenLensHUDViewController: UIViewController, CLLocationManagerDelega
         relayRow.axis = .horizontal
         relayRow.distribution = .fillEqually
         relayRow.spacing = 10
-        let stack = UIStackView(arrangedSubviews: [heading, title, subtitle, segment, inputLabel, field, sizeTitle, fontSelector, fontDetail, send, mic, relayExplanation, relayRow, preview, pageCounter, pager, pagesButton, status])
+        let stack = UIStackView(arrangedSubviews: [
+            heading, title, subtitle, segment, inputLabel, field,
+            aiUtilities, sizeTitle, fontSelector, fontDetail, send, mic,
+            captionsUtilities, relayExplanation, relayRow,
+            fullResponse, resultUtilities, preview, pageCounter, pager,
+            pagesButton, status
+        ])
         relaySetup.isHidden = true
         relayCheck.isHidden = true
         relayExplanation.isHidden = true
@@ -335,8 +493,10 @@ final class OpenLensHUDViewController: UIViewController, CLLocationManagerDelega
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
         stopSpeech(submit: false)
+        relayRequestID += 1
         relayTask?.cancel()
         relayTask = nil
+        send.isEnabled = true
     }
 
     @objc private func modeChanged() {
@@ -347,9 +507,18 @@ final class OpenLensHUDViewController: UIViewController, CLLocationManagerDelega
         field.accessibilityLabel = labels[i]
         send.setTitle(i == 2 ? "Ask AI" : "Show on glasses", for: .normal)
         mic.isHidden = i == 0
+        aiUtilities.isHidden = i != 2
+        captionsUtilities.isHidden = i != 1
         relaySetup.isHidden = i != 2
         relayCheck.isHidden = i != 2
         relayExplanation.isHidden = i != 2
+        fullResponse.isHidden = i != 2 || latestAIResponse.isEmpty
+        resultUtilities.isHidden = i != 2 || latestAIResponse.isEmpty
+        if i == 2 { send.setTitle(aiTask == "general" ? "Ask AI" : (aiTaskButton.configuration?.title ?? "Ask AI"), for: .normal) }
+        relayRequestID += 1
+        relayTask?.cancel()
+        relayTask = nil
+        send.isEnabled = true
         if i == 2 {
             let saved = UserDefaults.standard.string(forKey: "openlens.relay") ?? ""
             relayExplanation.text = saved.isEmpty
@@ -483,7 +652,15 @@ final class OpenLensHUDViewController: UIViewController, CLLocationManagerDelega
                             self.draw("OPENLENS / LIVE CAPTIONS", speech)
                         }
                     }
-                    if error != nil { self.stopSpeech(submit: false) }
+                    if result?.isFinal == true {
+                        // Recognition sessions are finite. Keep the last transcript
+                        // readable rather than silently leaving the mic "listening".
+                        self.stopSpeech(submit: false)
+                        self.status.text = "This speech segment ended. Tap Start listening to continue."
+                    } else if error != nil {
+                        self.stopSpeech(submit: false)
+                        self.status.text = "Speech recognition stopped: \(error?.localizedDescription ?? "unknown error"). Tap Start listening to retry."
+                    }
                 }
             }
         } catch {
@@ -531,6 +708,8 @@ final class OpenLensHUDViewController: UIViewController, CLLocationManagerDelega
             configureRelay()
             return
         }
+        relayRequestID += 1
+        let requestID = relayRequestID
         relayTask?.cancel()
         let url = endpoint.appendingPathComponent("health")
         var request = URLRequest(url: url)
@@ -541,7 +720,7 @@ final class OpenLensHUDViewController: UIViewController, CLLocationManagerDelega
             let code = (response as? HTTPURLResponse)?.statusCode ?? 0
             let payload = data.flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }
             DispatchQueue.main.async {
-                guard let self = self else { return }
+                guard let self = self, self.relayRequestID == requestID else { return }
                 if (200..<300).contains(code), payload?["status"] as? String == "ok" {
                     let ready = payload?["configured"] as? Bool ?? false
                     self.status.text = ready
@@ -569,13 +748,16 @@ final class OpenLensHUDViewController: UIViewController, CLLocationManagerDelega
             status.text = "This is too long for the AI relay. Use up to 3,000 characters."
             return
         }
+        relayRequestID += 1
+        let requestID = relayRequestID
         relayTask?.cancel()
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("Bearer " + token, forHTTPHeaderField: "Authorization")
         request.httpBody = try? JSONSerialization.data(withJSONObject: [
-            "mode": mode, "text": trimmed, "target_language": targetLanguage
+            "mode": mode, "text": trimmed, "target_language": targetLanguage,
+            "task": aiTask
         ])
         request.timeoutInterval = 35
         status.text = mode == "translate" ? "Translating…" : "Asking AI…"
@@ -584,13 +766,17 @@ final class OpenLensHUDViewController: UIViewController, CLLocationManagerDelega
             let code = (response as? HTTPURLResponse)?.statusCode ?? 0
             let json = data.flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }
             DispatchQueue.main.async {
-                guard let self = self else { return }
+                guard let self = self, self.relayRequestID == requestID else { return }
                 self.send.isEnabled = true
                 if (200..<300).contains(code), let raw = json?["text"] as? String,
                    !raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     // Use the existing paged bitmap renderer to keep all answer text.
+                    self.latestAIResponse = raw
+                    self.fullResponse.text = raw
+                    self.fullResponse.isHidden = false
+                    self.resultUtilities.isHidden = false
                     self.draw(mode == "translate" ? "OPENLENS / TRANSLATE" : "OPENLENS / AI", raw)
-                    self.relayExplanation.text = "AI answered successfully. Use Next to read long answers."
+                    self.relayExplanation.text = "Answer ready. Scroll the full response on your iPhone or use Next to read all pages on ENGO 3."
                 } else {
                     let detail = (json?["error"] as? String) ?? error?.localizedDescription
                     if code == 401 {
