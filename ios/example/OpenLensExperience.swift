@@ -277,8 +277,10 @@ final class OpenLensImageViewController: UIViewController, PHPickerViewControlle
     private let glasses: Glasses
     private let preview = UIImageView()
     private let status = LensUI.label("Choose a photo to begin.", size: 14, color: LensUI.muted)
-    private let quality = UISegmentedControl(items: ["High contrast", "More detail"])
+    private let quality = UISegmentedControl(items: ["High contrast", "Dither", "More detail"])
     private let rotate = UISwitch()
+    private let invertColors = UISwitch()
+    private let fillFrame = UISwitch()
     private var selected: UIImage?
     private var transmitting = false
 
@@ -308,6 +310,16 @@ final class OpenLensImageViewController: UIViewController, PHPickerViewControlle
         row.alignment = .center
         rotate.onTintColor = LensUI.accent
         content.addArrangedSubview(LensUI.card(row))
+        let invertRow = UIStackView(arrangedSubviews: [LensUI.label("Invert black / white", size: 15), invertColors])
+        invertRow.distribution = .equalSpacing
+        invertRow.alignment = .center
+        invertColors.onTintColor = LensUI.accent
+        content.addArrangedSubview(LensUI.card(invertRow))
+        let cropRow = UIStackView(arrangedSubviews: [LensUI.label("Fill frame (crop edges)", size: 15), fillFrame])
+        cropRow.distribution = .equalSpacing
+        cropRow.alignment = .center
+        fillFrame.onTintColor = LensUI.accent
+        content.addArrangedSubview(LensUI.card(cropRow))
         content.addArrangedSubview(LensUI.button("Show on glasses", icon: "eyeglasses") { [weak self] in self?.sendImage() })
         content.addArrangedSubview(LensUI.button("Clear display", icon: "xmark.circle") { [weak self] in
             self?.glasses.clear()
@@ -368,10 +380,12 @@ final class OpenLensImageViewController: UIViewController, PHPickerViewControlle
         transmitting = true
         DispatchQueue.main.asyncAfter(deadline: .now() + 5) { [weak self] in self?.transmitting = false }
         status.text = "Converting to monochrome…"
-        let detailed = quality.selectedSegmentIndex == 1
+        let mode = quality.selectedSegmentIndex
         let flip = rotate.isOn
+        let invert = invertColors.isOn
+        let crop = fillFrame.isOn
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            let processed = Self.prepare(image, detailed: detailed, rotate: flip)
+            let processed = Self.prepare(image, mode: mode, rotate: flip, invert: invert, crop: crop)
             DispatchQueue.main.async {
                 guard let self = self else { return }
                 guard let processed = processed else { self.status.text = "Image conversion failed."; return }
@@ -379,21 +393,23 @@ final class OpenLensImageViewController: UIViewController, PHPickerViewControlle
                 self.glasses.clear()
                 // Do not call the SDK's generic imgStream 1bpp wrapper: v4.5.5
                 // incorrectly passes x for y. Call the direct method instead.
-                if detailed {
+                if mode == 2 {
                     self.glasses.imgStream4bppHeatShrink(image: processed, x: 56, y: 80)
                 } else {
                     self.glasses.imgStream1bpp(image: processed, x: 56, y: 80)
                 }
                 // Streaming does not require cfgWrite/cfgSet or an immediate imgDelete.
-                self.status.text = "Queued 192×96 \(detailed ? "compressed 4-bit" : "1-bit") image. Check the glasses."
+                let format = mode == 2 ? "4-bit compressed" : mode == 1 ? "1-bit dithered" : "1-bit high contrast"
+                self.status.text = "Queued 192×96 \(format) image. Check ENGO 3; retry with High contrast if missing."
             }
         }
     }
 
-    /// Normalize into opaque RGB before handing the image to the legacy SDK.
-    /// SDK's 1bpp encoder regards *any* non-black pixel as white; threshold first.
-    private static func prepare(_ image: UIImage, detailed: Bool, rotate: Bool) -> UIImage? {
+    /// Preprocess for the SDK's monochrome encoder: resize, threshold or dither,
+    /// invert if desired, and optionally turn the final frame 180 degrees.
+    private static func prepare(_ image: UIImage, mode: Int, rotate: Bool, invert: Bool, crop: Bool) -> UIImage? {
         let width = 192, height = 96
+        guard image.size.width > 0, image.size.height > 0 else { return nil }
         let format = UIGraphicsImageRendererFormat.default()
         format.opaque = true
         format.scale = 1
@@ -401,27 +417,41 @@ final class OpenLensImageViewController: UIViewController, PHPickerViewControlle
         let normalized = renderer.image { _ in
             UIColor.black.setFill()
             UIRectFill(CGRect(x: 0, y: 0, width: width, height: height))
-            let scale = min(CGFloat(width) / image.size.width, CGFloat(height) / image.size.height)
+            let scaleX = CGFloat(width) / image.size.width
+            let scaleY = CGFloat(height) / image.size.height
+            let scale = crop ? max(scaleX, scaleY) : min(scaleX, scaleY)
             let size = CGSize(width: image.size.width * scale, height: image.size.height * scale)
-            image.draw(in: CGRect(x: (CGFloat(width) - size.width) / 2, y: (CGFloat(height) - size.height) / 2, width: size.width, height: size.height))
+            image.draw(in: CGRect(x: (CGFloat(width) - size.width) / 2,
+                                  y: (CGFloat(height) - size.height) / 2,
+                                  width: size.width, height: size.height))
         }
         guard let input = normalized.cgImage else { return nil }
         let bytesPerRow = width * 4
         var bytes = [UInt8](repeating: 0, count: height * bytesPerRow)
         let space = CGColorSpaceCreateDeviceRGB()
-        guard let inputContext = CGContext(data: &bytes, width: width, height: height, bitsPerComponent: 8, bytesPerRow: bytesPerRow, space: space, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
+        guard let inputContext = CGContext(data: &bytes, width: width, height: height,
+                                           bitsPerComponent: 8, bytesPerRow: bytesPerRow, space: space,
+                                           bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
         inputContext.draw(input, in: CGRect(x: 0, y: 0, width: width, height: height))
-        if !detailed {
-            for i in stride(from: 0, to: bytes.count, by: 4) {
-                let light = 0.2126 * Double(bytes[i]) + 0.7152 * Double(bytes[i + 1]) + 0.0722 * Double(bytes[i + 2])
-                let value: UInt8 = light >= 125 ? 255 : 0
-                bytes[i] = value
-                bytes[i + 1] = value
-                bytes[i + 2] = value
-                bytes[i + 3] = 255
-            }
+        let grays = stride(from: 0, to: bytes.count, by: 4).map { i -> Double in
+            let light = 0.2126 * Double(bytes[i]) + 0.7152 * Double(bytes[i + 1]) + 0.0722 * Double(bytes[i + 2])
+            return invert ? 255 - light : light
         }
-        guard let outputContext = CGContext(data: &bytes, width: width, height: height, bitsPerComponent: 8, bytesPerRow: bytesPerRow, space: space, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue),
+        let dithered = mode == 1 ? OpenLensText.dither(grays, width: width) : []
+        for pixel in 0..<(width * height) {
+            let brightness: UInt8
+            if mode == 1 { brightness = dithered[pixel] }
+            else if mode == 2 { brightness = UInt8(grays[pixel].rounded()) }
+            else { brightness = grays[pixel] >= 125 ? 255 : 0 }
+            let i = pixel * 4
+            bytes[i] = brightness
+            bytes[i + 1] = brightness
+            bytes[i + 2] = brightness
+            bytes[i + 3] = 255
+        }
+        guard let outputContext = CGContext(data: &bytes, width: width, height: height,
+                                            bitsPerComponent: 8, bytesPerRow: bytesPerRow, space: space,
+                                            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue),
               let output = outputContext.makeImage() else { return nil }
         let result = UIImage(cgImage: output)
         guard rotate else { return result }
