@@ -429,6 +429,9 @@ final class OpenLensFocusViewController: UIViewController {
     private let choices = UISegmentedControl(items: ["5 min", "15 min", "25 min"])
     private let digits = UILabel()
     private let state = UILabel()
+    private let liveClock = UISwitch()
+    private var clockTimer: Timer?
+    private var lastClockStamp = ""
     private let start = UIButton(type: .system)
     private var duration: TimeInterval = 5 * 60
     private var remaining: TimeInterval = 5 * 60
@@ -458,6 +461,14 @@ final class OpenLensFocusViewController: UIViewController {
         content.addArrangedSubview(start)
         content.addArrangedSubview(LensUI.button("Reset timer", icon: "arrow.counterclockwise") { [weak self] in self?.reset() })
         content.addArrangedSubview(LensUI.button("Show current time", icon: "clock") { [weak self] in self?.showClock() })
+        liveClock.onTintColor = LensUI.accent
+        liveClock.addTarget(self, action: #selector(toggleLiveClock), for: .valueChanged)
+        let clockOption = UIStackView(arrangedSubviews: [
+            LensUI.label("Keep clock updated on glasses", size: 15), liveClock
+        ])
+        clockOption.alignment = .center
+        clockOption.distribution = .equalSpacing
+        content.addArrangedSubview(LensUI.card(clockOption))
         content.addArrangedSubview(LensUI.button("Clear glasses", icon: "xmark.circle") { [weak self] in self?.glasses.clear() })
         state.numberOfLines = 0
         state.textColor = LensUI.muted
@@ -468,6 +479,8 @@ final class OpenLensFocusViewController: UIViewController {
         super.viewWillDisappear(animated)
         if end != nil { pause() }
         tickTimer?.invalidate()
+        stopLiveClock()
+        OpenLensCanvas.cancelPending()
     }
     @objc private func setDuration() {
         guard end == nil else { return }
@@ -478,6 +491,10 @@ final class OpenLensFocusViewController: UIViewController {
     @objc private func startPause() {
         if end != nil { pause() }
         else {
+            if liveClock.isOn {
+                liveClock.isOn = false
+                stopLiveClock()
+            }
             if remaining <= 0 { remaining = duration }
             end = Date().addingTimeInterval(remaining)
             start.configuration?.title = "Pause timer"
@@ -499,7 +516,7 @@ final class OpenLensFocusViewController: UIViewController {
         guard let end = end else { return }
         remaining = max(0, end.timeIntervalSinceNow)
         digits.text = OpenLensText.countdown(remaining)
-        let bucket = Int(remaining / 5)
+        let bucket = Int(remaining / 10)
         if bucket != lastDisplayed || remaining == 0 {
             OpenLensCanvas.show(glasses, title: "FOCUS SESSION", message: OpenLensText.countdown(remaining))
             lastDisplayed = bucket
@@ -513,7 +530,7 @@ final class OpenLensFocusViewController: UIViewController {
             state.text = "Focus session complete."
             OpenLensCanvas.show(glasses, title: "FOCUS COMPLETE", message: "NICE WORK!")
             UINotificationFeedbackGenerator().notificationOccurred(.success)
-        } else { state.text = "Running. Updated on glasses every ~5 seconds." }
+        } else { state.text = "Running. Glasses update about every 10 seconds." }
     }
     private func reset() {
         tickTimer?.invalidate()
@@ -527,9 +544,37 @@ final class OpenLensFocusViewController: UIViewController {
         state.text = "Reset."
     }
     private func showClock() {
-        let stamp = DateFormatter.localizedString(from: Date(), dateStyle: .medium, timeStyle: .short)
+        let stamp = DateFormatter.localizedString(from: Date(), dateStyle: .none, timeStyle: .short)
         OpenLensCanvas.show(glasses, title: "CURRENT TIME", message: stamp)
-        state.text = "Current phone time queued on glasses."
+        lastClockStamp = stamp
+        state.text = liveClock.isOn
+            ? "Clock active while this screen is open. Updates when the minute changes."
+            : "Current phone time queued once on glasses."
+    }
+
+    @objc private func toggleLiveClock() {
+        if liveClock.isOn {
+            if end != nil { pause() }
+            choices.isEnabled = false
+            showClock()
+            clockTimer?.invalidate()
+            clockTimer = Timer.scheduledTimer(withTimeInterval: 15, repeats: true) { [weak self] _ in
+                guard let self = self, self.liveClock.isOn else { return }
+                let time = DateFormatter.localizedString(from: Date(), dateStyle: .none, timeStyle: .short)
+                if time != self.lastClockStamp { self.showClock() }
+            }
+        } else {
+            stopLiveClock()
+            choices.isEnabled = true
+            state.text = "Live clock stopped."
+        }
+    }
+
+    private func stopLiveClock() {
+        clockTimer?.invalidate()
+        clockTimer = nil
+        liveClock.isOn = false
+        lastClockStamp = ""
     }
 }
 
