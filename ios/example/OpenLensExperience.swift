@@ -298,13 +298,6 @@ final class OpenLensImageViewController: UIViewController, PHPickerViewControlle
             self?.status.text = "Clear command sent."
         })
         content.addArrangedSubview(status)
-        glasses.subscribeToFlowControlNotifications { [weak self] state in
-            switch state {
-            case .error, .overflow, .unexpectedDataType, .missingConfiguration:
-                DispatchQueue.main.async { self?.status.text = "Glasses reported transfer issue: \(state). Try High contrast or a smaller image." }
-            default: break
-            }
-        }
         content.addArrangedSubview(LensUI.label("Image data is queued over BLE. This preview cannot yet verify every packet arrived. Try a simple black-and-white logo first.", size: 12, color: LensUI.muted))
     }
 
@@ -335,6 +328,17 @@ final class OpenLensImageViewController: UIViewController, PHPickerViewControlle
                 self.status.text = "Photo ready. Tap Show on glasses."
             }
         }
+    }
+
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+            glasses.subscribeToFlowControlNotifications { [weak self] state in
+                switch state {
+                case .error, .overflow, .unexpectedDataType, .missingConfiguration:
+                    DispatchQueue.main.async { self?.status.text = "Glasses reported transfer issue: \(state). Try High contrast or a smaller image." }
+                default: break
+                }
+            }
     }
 
     override func viewWillDisappear(_ animated: Bool) {
