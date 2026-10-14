@@ -205,3 +205,61 @@ public enum OpenLensDisplayGeometry {
         PhotoSize(name: "Full", width: 304, height: 240)
     ]
 }
+
+
+/// AI providers are explicit. Automatic *never* sends prompts to a cloud
+/// service: it uses Apple's on-device model or a user-paired local Mac.
+public enum OpenLensAIProvider: Int, CaseIterable {
+    case automatic = 0
+    case iphone = 1
+    case localMac = 2
+    case cloudRelay = 3
+
+    public var title: String {
+        switch self {
+        case .automatic: return "Auto"
+        case .iphone: return "iPhone"
+        case .localMac: return "Mac"
+        case .cloudRelay: return "Cloud"
+        }
+    }
+    private static let preference = "openlens.ai.provider"
+    public static var selected: OpenLensAIProvider {
+        get { OpenLensAIProvider(rawValue: UserDefaults.standard.integer(forKey: preference)) ?? .automatic }
+        set { UserDefaults.standard.set(newValue.rawValue, forKey: preference) }
+    }
+}
+
+public enum OpenLensAIPrompt {
+    public static let tasks = ["general", "explain", "summarize", "rewrite", "brainstorm"]
+    public static let translationLanguages = [
+        "en": "English", "es": "Spanish", "fr": "French",
+        "hi": "Hindi", "te": "Telugu"
+    ]
+
+    public static func isValid(task: String) -> Bool { tasks.contains(task) }
+
+    public static func instructions(mode: String, task: String, targetLanguage: String = "en") -> String {
+        if mode == "translate" {
+            let language = translationLanguages[targetLanguage] ?? "English"
+            return "Translate the user's text faithfully into \(language). Return only the translation. " +
+                "Preserve names, places, addresses, street names, numbers, and original meaning. " +
+                "Do not invent missing information."
+        }
+        let base = "You are OpenLens, a concise smart-glasses assistant. " +
+            "Be accurate, use simple plain text, usually reply in under 120 words, " +
+            "and do not invent recent facts, location, camera access or internet browsing. "
+        switch task {
+        case "explain":
+            return base + "Explain the topic simply with one clear example."
+        case "summarize":
+            return base + "Summarize only the supplied information, preserving key names and numbers."
+        case "rewrite":
+            return base + "Rewrite the supplied text for natural clarity, keeping the meaning."
+        case "brainstorm":
+            return base + "Suggest four distinct, practical ideas, one short sentence each."
+        default:
+            return base + "Answer the user's question directly and helpfully."
+        }
+    }
+}
