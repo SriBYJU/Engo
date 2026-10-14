@@ -24,7 +24,7 @@ class CommandsMenuTableViewController: CommandsTableViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         
-        title = "Commands"
+        title = "Advanced tools"
 
         commandNames = [
             "OpenLens HUD",
@@ -159,6 +159,7 @@ import Security
 
 final class OpenLensHUDViewController: UIViewController, CLLocationManagerDelegate {
     private let glasses: Glasses
+    private let initialMode: Int
     private let locationManager = CLLocationManager()
     private let audioEngine = AVAudioEngine()
     private var recognizer = SFSpeechRecognizer(locale: Locale(identifier: "en-US"))
@@ -176,8 +177,9 @@ final class OpenLensHUDViewController: UIViewController, CLLocationManagerDelega
     private let mic = UIButton(type: .system)
     private let send = UIButton(type: .system)
 
-    init(_ glasses: Glasses) {
+    init(_ glasses: Glasses, initialMode: Int = 0) {
         self.glasses = glasses
+        self.initialMode = max(0, min(3, initialMode))
         super.init(nibName: nil, bundle: nil)
     }
     required init?(coder: NSCoder) { fatalError("Use init(glasses)") }
@@ -186,7 +188,7 @@ final class OpenLensHUDViewController: UIViewController, CLLocationManagerDelega
         super.viewDidLoad()
         title = "OpenLens"
         view.backgroundColor = UIColor(red: 0.045, green: 0.072, blue: 0.06, alpha: 1)
-        navigationItem.rightBarButtonItem = UIBarButtonItem(title: "Settings", style: .plain, target: self, action: #selector(settings))
+        navigationItem.rightBarButtonItem = UIBarButtonItem(title: "Options", style: .plain, target: self, action: #selector(settings))
         locationManager.delegate = self
         let accent = UIColor(red: 0.44, green: 0.96, blue: 0.63, alpha: 1)
         let heading = UILabel()
@@ -201,7 +203,7 @@ final class OpenLensHUDViewController: UIViewController, CLLocationManagerDelega
         subtitle.text = "Type or speak on iPhone; the result appears in your glasses."
         subtitle.textColor = .lightGray
         subtitle.numberOfLines = 0
-        segment.selectedSegmentIndex = 0
+        segment.selectedSegmentIndex = initialMode
         segment.selectedSegmentTintColor = accent
         segment.addTarget(self, action: #selector(modeChanged), for: .valueChanged)
         field.placeholder = "Your message"
@@ -254,7 +256,8 @@ final class OpenLensHUDViewController: UIViewController, CLLocationManagerDelega
             stack.trailingAnchor.constraint(equalTo: scroll.contentLayoutGuide.trailingAnchor, constant: -20),
             stack.widthAnchor.constraint(equalTo: scroll.frameLayoutGuide.widthAnchor, constant: -40)
         ])
-        draw("OPENLENS / READY", "HELLO FROM OPENLENS")
+        preview.text = "Preview appears here after sending."
+        modeChanged()
     }
 
     override func viewWillDisappear(_ animated: Bool) {
@@ -269,7 +272,7 @@ final class OpenLensHUDViewController: UIViewController, CLLocationManagerDelega
         field.placeholder = labels[i]
         send.setTitle(i == 3 ? "Find next turn" : i == 2 ? "Ask AI" : "Show on glasses", for: .normal)
         mic.isHidden = i == 3
-        draw("OPENLENS / " + modes[i], "READY")
+        status.text = "Mode ready. Enter text, or start listening."
     }
 
     // Reuses the same vendor SDK calls from GraphicsCommandsViewController.
@@ -290,14 +293,14 @@ final class OpenLensHUDViewController: UIViewController, CLLocationManagerDelega
         if !current.isEmpty && lines.count < 5 { lines.append(current) }
         glasses.clear()
         glasses.color(level: 15)
-        glasses.txt(x: 8, y: 12, rotation: .bottomRL, font: 2, color: 15, string: String(heading.prefix(27)))
+        glasses.txt(x: 8, y: 12, rotation: OpenLensOrientation.rotation, font: 2, color: 15, string: String(heading.prefix(27)))
         glasses.line(x0: 8, x1: 290, y0: 39, y1: 39)
         for (i, line) in lines.enumerated() {
-            glasses.txt(x: 8, y: 57 + i * 34, rotation: .bottomRL, font: 2, color: 15, string: line)
+            glasses.txt(x: 8, y: Int16(57 + i * 34), rotation: OpenLensOrientation.rotation, font: 2, color: 15, string: line)
         }
         preview.text = heading + "\n\n" + lines.joined(separator: "\n")
         lastUpdate = Date()
-        status.text = "Display commands sent. Confirm on ENGO 3 hardware."
+        status.text = "Text queued for ENGO 3. Check the display."
     }
 
     @objc private func sendPressed() {
