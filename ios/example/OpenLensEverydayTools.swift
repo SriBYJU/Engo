@@ -135,7 +135,7 @@ final class OpenLensPresenterViewController: UIViewController {
     private let preview = UILabel()
     private let status = UILabel()
     private let back = UIButton(type: .system)
-    private let next = UIButton(type: .system)
+    private let nextButton = UIButton(type: .system)
     private let auto = UIButton(type: .system)
     private var timer: Timer?
     private var pages: [[String]] = []
@@ -172,16 +172,16 @@ final class OpenLensPresenterViewController: UIViewController {
         preview.textAlignment = .center
         preview.heightAnchor.constraint(greaterThanOrEqualToConstant: 142).isActive = true
         content.addArrangedSubview(LensUI.card(preview))
-        let row = UIStackView(arrangedSubviews: [back, next])
+        let row = UIStackView(arrangedSubviews: [back, nextButton])
         row.axis = .horizontal
         row.spacing = 12
         row.distribution = .fillEqually
         back.configuration = .filled()
         back.configuration?.title = "Previous"
-        next.configuration = .filled()
-        next.configuration?.title = "Next"
+        nextButton.configuration = .filled()
+        nextButton.configuration?.title = "Next"
         back.addTarget(self, action: #selector(previousPage), for: .touchUpInside)
-        next.addTarget(self, action: #selector(nextPage), for: .touchUpInside)
+        nextButton.addTarget(self, action: #selector(nextPage), for: .touchUpInside)
         content.addArrangedSubview(row)
         auto.configuration = .bordered()
         auto.configuration?.title = "Auto-advance every 10s"
@@ -211,7 +211,7 @@ final class OpenLensPresenterViewController: UIViewController {
         pageInfo.text = "PAGE \(current + 1) OF \(pages.count)"
         preview.text = lines.joined(separator: "\n")
         back.isEnabled = current > 0
-        next.isEnabled = current + 1 < pages.count
+        nextButton.isEnabled = current + 1 < pages.count
         status.text = "Page queued for your glasses."
     }
     @objc private func previousPage() { guard current > 0 else { return }; current -= 1; render() }
@@ -353,7 +353,7 @@ final class OpenLensRoutePreviewViewController: UIViewController, CLLocationMana
     private let instruction = UILabel()
     private let position = UILabel()
     private let previous = UIButton(type: .system)
-    private let next = UIButton(type: .system)
+    private let nextButton = UIButton(type: .system)
     private var pendingDestination: String?
     private var steps: [MKRoute.Step] = []
     private var stepIndex = 0
@@ -387,15 +387,15 @@ final class OpenLensRoutePreviewViewController: UIViewController, CLLocationMana
         instruction.text = "Your next turn will appear here."
         instruction.heightAnchor.constraint(greaterThanOrEqualToConstant: 100).isActive = true
         content.addArrangedSubview(LensUI.card(instruction))
-        let row = UIStackView(arrangedSubviews: [previous, next])
+        let row = UIStackView(arrangedSubviews: [previous, nextButton])
         row.spacing = 12
         row.distribution = .fillEqually
         previous.configuration = .filled()
         previous.configuration?.title = "Previous turn"
-        next.configuration = .filled()
-        next.configuration?.title = "Next turn"
+        nextButton.configuration = .filled()
+        nextButton.configuration?.title = "Next turn"
         previous.addTarget(self, action: #selector(previousStep), for: .touchUpInside)
-        next.addTarget(self, action: #selector(nextStep), for: .touchUpInside)
+        nextButton.addTarget(self, action: #selector(nextStep), for: .touchUpInside)
         content.addArrangedSubview(row)
         status.textColor = LensUI.muted
         status.numberOfLines = 0
@@ -410,7 +410,7 @@ final class OpenLensRoutePreviewViewController: UIViewController, CLLocationMana
     }
     private func updateButtons() {
         previous.isEnabled = stepIndex > 0
-        next.isEnabled = stepIndex + 1 < steps.count
+        nextButton.isEnabled = stepIndex + 1 < steps.count
     }
     private func findRoute() {
         destination.resignFirstResponder()
