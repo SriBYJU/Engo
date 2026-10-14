@@ -179,10 +179,19 @@ final class OpenLensHomeViewController: UIViewController {
                 guard let self = self else { return }; self.open(OpenLensImageViewController(self.glasses))
             }
         ))
-        content.addArrangedSubview(LensUI.section("AI & speech", detail: "Phone microphone and a private AI relay."))
+        content.addArrangedSubview(LensUI.section("AI & speech", detail: "Ask questions, dictate, translate, or read text from photos."))
         content.addArrangedSubview(LensUI.pair(
             LensUI.tile("Captions", subtitle: "Live speech text", symbol: "waveform") { [weak self] in self?.hud(1) },
             LensUI.tile("Ask AI", subtitle: "Relay required", symbol: "sparkles") { [weak self] in self?.hud(2) }
+        ))
+        content.addArrangedSubview(LensUI.pair(
+            LensUI.tile("Read text", subtitle: "Camera & on-device OCR", symbol: "text.viewfinder") { [weak self] in
+                guard let self = self else { return }
+                self.open(OpenLensReadTextViewController(self.glasses))
+            },
+            LensUI.tile("Translate", subtitle: "Via your private AI relay", symbol: "globe") { [weak self] in
+                self?.hud(2)
+            }
         ))
         content.addArrangedSubview(LensUI.section("Everyday tools", detail: "Useful even without an AI subscription."))
         content.addArrangedSubview(LensUI.pair(
