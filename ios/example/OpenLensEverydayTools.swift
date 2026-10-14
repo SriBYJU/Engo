@@ -5,15 +5,25 @@ import ActiveLookSDK
 
 /// Common ENGO 3 text canvas. Never silently chop off a line mid-word.
 enum OpenLensCanvas {
+    /// Font 0 is the SDK's 24px face (font 2 used 35px and caused clipping).
+    /// Text stays in a conservative optical safe area; no full-width divider.
     static func show(_ glasses: Glasses, title: String, lines: [String]) {
         glasses.clear()
-        glasses.color(level: 15)
-        glasses.txt(x: 8, y: 12, rotation: OpenLensOrientation.rotation, font: 2, color: 15,
-                    string: String(OpenLensText.sanitize(title).uppercased().prefix(23)))
-        glasses.line(x0: 8, x1: 295, y0: 39, y1: 39)
-        for (index, line) in lines.prefix(4).enumerated() {
-            glasses.txt(x: 8, y: Int16(57 + index * 34), rotation: OpenLensOrientation.rotation,
-                        font: 2, color: 15, string: String(line.prefix(23)))
+        let header = OpenLensText.sanitize(title).uppercased()
+        let h = OpenLensOrientation.origin(
+            x: OpenLensDisplayGeometry.defaultTextX,
+            y: OpenLensDisplayGeometry.headerY
+        )
+        glasses.txt(x: h.x, y: h.y, rotation: OpenLensOrientation.rotation, font: 0, color: 15,
+                    string: String(header.prefix(OpenLensText.lineWidth)))
+        for (index, line) in lines.prefix(OpenLensText.linesPerPage).enumerated() {
+            let at = OpenLensOrientation.origin(
+                x: OpenLensDisplayGeometry.defaultTextX,
+                y: OpenLensDisplayGeometry.bodyStartY + index * OpenLensDisplayGeometry.bodyLineSpacing
+            )
+            glasses.txt(x: at.x, y: at.y, rotation: OpenLensOrientation.rotation,
+                        font: 0, color: 15,
+                        string: String(OpenLensText.sanitize(line).prefix(OpenLensText.lineWidth)))
         }
     }
     static func show(_ glasses: Glasses, title: String, message: String) {
