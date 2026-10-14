@@ -2,14 +2,6 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <key>NSBluetoothAlwaysUsageDescription</key>
-    <string>Connect to ENGO smart glasses.</string>
-    <key>NSSpeechRecognitionUsageDescription</key>
-    <string>Transcribe speech from the iPhone microphone for OpenLens captions.</string>
-    <key>NSMicrophoneUsageDescription</key>
-    <string>Listen only when you start OpenLens captions or an AI question.</string>
-    <key>NSLocationWhenInUseUsageDescription</key>
-    <string>Calculate walking route instructions for your smart glasses.</string>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsArbitraryLoads</key>
