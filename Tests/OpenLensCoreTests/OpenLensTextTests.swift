@@ -34,6 +34,15 @@ final class OpenLensTextTests: XCTestCase {
         XCTAssertEqual(OpenLensText.countdown(90.2), "01:31")
         XCTAssertEqual(OpenLensText.countdown(600), "10:00")
     }
+    func testDitheringProducesOnly1BitPixels() {
+        let input = Array(repeating: 127.0, count: 64)
+        let result = OpenLensText.dither(input, width: 8)
+        XCTAssertEqual(result.count, input.count)
+        XCTAssertTrue(result.allSatisfy { $0 == 0 || $0 == 255 })
+        XCTAssertTrue(result.contains(0) && result.contains(255))
+        XCTAssertEqual(OpenLensText.dither([0, 255, 0, 255], width: 2), [0, 255, 0, 255])
+        XCTAssertEqual(OpenLensText.dither(input, width: 0), [])
+    }
     func testCardsJSONRoundTrip() throws {
         let card = OpenLensCard(title: "Meeting", body: "Remember the intro")
         let payload = try JSONEncoder().encode([card])
