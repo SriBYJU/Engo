@@ -1,9 +1,76 @@
 import Foundation
 
 /// Pure Foundation rendering primitives shared by the iOS client and SwiftPM tests.
+/// Built-in ActiveLook fonts: 0 = 24px, 2 = 35px, 3 = 49px.
+/// A larger font intentionally fits fewer letters and lines on a 304×256 HUD.
+/// All message text is preserved across pages rather than shortened.
+public enum OpenLensTextSize: Int, CaseIterable {
+    case small = 0, medium = 1, large = 2
+
+    public var name: String {
+        switch self {
+        case .small: return "Small"
+        case .medium: return "Medium"
+        case .large: return "Large"
+        }
+    }
+    public var fontID: UInt8 {
+        switch self {
+        case .small: return 0
+        case .medium: return 2
+        case .large: return 3
+        }
+    }
+    public var fontHeight: Int {
+        switch self {
+        case .small: return 24
+        case .medium: return 35
+        case .large: return 49
+        }
+    }
+    /// Conservative layout widths account for the widest hardware glyphs.
+    public var charactersPerLine: Int {
+        switch self {
+        case .small: return 12
+        case .medium: return 9
+        case .large: return 6
+        }
+    }
+    public var linesPerPage: Int {
+        switch self {
+        case .small: return 4
+        case .medium: return 3
+        case .large: return 2
+        }
+    }
+    public var firstLineY: Int {
+        switch self {
+        case .small: return 84
+        case .medium: return 90
+        case .large: return 101
+        }
+    }
+    public var lineSpacing: Int {
+        switch self {
+        case .small: return 35
+        case .medium: return 49
+        case .large: return 64
+        }
+    }
+    private static let key = "openlens.display.textSize"
+    public static var selected: OpenLensTextSize {
+        get {
+            guard let raw = UserDefaults.standard.object(forKey: key) as? Int,
+                  let size = OpenLensTextSize(rawValue: raw) else { return .medium }
+            return size
+        }
+        set { UserDefaults.standard.set(newValue.rawValue, forKey: key) }
+    }
+}
+
 public enum OpenLensText {
-    public static let lineWidth = 12
-    public static let linesPerPage = 4
+    public static let lineWidth = OpenLensTextSize.medium.charactersPerLine
+    public static let linesPerPage = OpenLensTextSize.medium.linesPerPage
 
     /// The legacy hardware font only supports a limited ASCII subset.
     public static func sanitize(_ input: String) -> String {
@@ -60,6 +127,10 @@ public enum OpenLensText {
         return stride(from: 0, to: items.count, by: pageSize).map { start in
             Array(items[start..<min(items.count, start + pageSize)])
         }
+    }
+
+    public static func pages(_ message: String, size: OpenLensTextSize) -> [[String]] {
+        pages(message, width: size.charactersPerLine, height: size.linesPerPage)
     }
 
     /// Floyd–Steinberg dithering for black-and-white display previews.
