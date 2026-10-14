@@ -67,7 +67,7 @@ class GlassesTableViewController: UITableViewController {
         tableView.rowHeight = 66
         tableView.separatorColor = UIColor(white: 0.23, alpha: 1)
         let label = UILabel(frame: CGRect(x: 20, y: 0, width: view.bounds.width - 40, height: 120))
-        label.text = "OPENLENS  /  ENGO 3\\n\\nTurn on your glasses, then tap Scan. Select your ENGO 3 to open the dashboard."
+        label.text = "OPENLENS  /  ENGO 3\n\nTurn on your glasses, then tap Scan. Select your ENGO 3 to open the dashboard."
         label.textColor = .white
         label.font = .systemFont(ofSize: 15, weight: .medium)
         label.numberOfLines = 0
