@@ -35,6 +35,34 @@ enum LensUI {
         return button
     }
 
+    static func tile(_ title: String, subtitle: String, symbol: String, action: @escaping () -> Void) -> UIButton {
+        let button = UIButton(type: .system)
+        var config = UIButton.Configuration.filled()
+        config.title = title
+        config.subtitle = subtitle
+        config.image = UIImage(systemName: symbol)
+        config.imagePlacement = .top
+        config.imagePadding = 11
+        config.titleAlignment = .center
+        config.baseBackgroundColor = card
+        config.baseForegroundColor = .white
+        config.cornerStyle = .large
+        config.contentInsets = NSDirectionalEdgeInsets(top: 18, leading: 10, bottom: 18, trailing: 10)
+        button.configuration = config
+        button.titleLabel?.numberOfLines = 2
+        button.heightAnchor.constraint(greaterThanOrEqualToConstant: 132).isActive = true
+        button.addAction(UIAction { _ in action() }, for: .touchUpInside)
+        return button
+    }
+
+    static func pair(_ first: UIView, _ second: UIView) -> UIStackView {
+        let row = UIStackView(arrangedSubviews: [first, second])
+        row.axis = .horizontal
+        row.distribution = .fillEqually
+        row.spacing = 12
+        return row
+    }
+
     static func section(_ title: String, detail: String? = nil) -> UIStackView {
         let group = UIStackView()
         group.axis = .vertical
@@ -112,47 +140,61 @@ final class OpenLensHomeViewController: UIViewController {
         navigationItem.largeTitleDisplayMode = .always
         navigationItem.rightBarButtonItem = UIBarButtonItem(title: "Disconnect", style: .plain, target: self, action: #selector(disconnect))
         let content = LensUI.stack(in: view)
-        content.addArrangedSubview(LensUI.label("YOUR GLASSES, YOUR WAY", size: 12, weight: .bold, color: LensUI.accent))
-        content.addArrangedSubview(LensUI.label("See more. Do more.", size: 29, weight: .bold))
-        content.addArrangedSubview(LensUI.label(glasses.name, size: 15, color: LensUI.muted))
-        let info = UIStackView(arrangedSubviews: [
-            LensUI.label("●  Connected", weight: .semibold, color: LensUI.accent), battery
+        content.addArrangedSubview(LensUI.label("OPENLENS  /  CONNECTED", size: 12, weight: .bold, color: LensUI.accent))
+        content.addArrangedSubview(LensUI.label("Your world, in view.", size: 30, weight: .bold))
+        let device = UIStackView(arrangedSubviews: [
+            LensUI.label("◉  ENGO 3 is connected", size: 17, weight: .bold, color: LensUI.accent),
+            LensUI.label(glasses.name, size: 14, color: LensUI.muted),
+            battery
         ])
-        info.axis = .vertical
-        info.spacing = 8
-        content.addArrangedSubview(LensUI.card(info))
-        content.addArrangedSubview(LensUI.section("Your tools", detail: "Send something to the ENGO 3 display."))
-        content.addArrangedSubview(LensUI.button("Send text", icon: "text.bubble.fill") { [weak self] in self?.hud(0) })
-        content.addArrangedSubview(LensUI.button("Display a photo", icon: "photo.on.rectangle") { [weak self] in
-            guard let self = self else { return }; self.open(OpenLensImageViewController(self.glasses))
-        })
-        content.addArrangedSubview(LensUI.button("Live captions", icon: "waveform") { [weak self] in self?.hud(1) })
-        content.addArrangedSubview(LensUI.button("Ask AI", icon: "sparkles") { [weak self] in self?.hud(2) })
-        content.addArrangedSubview(LensUI.button("Walking directions", icon: "location.north.line.fill") { [weak self] in guard let self = self else { return }; self.open(OpenLensRoutePreviewViewController(self.glasses)) })
-        content.addArrangedSubview(LensUI.section("Everyday HUD tools", detail: "Simple tools that work without a cloud account."))
-        content.addArrangedSubview(LensUI.button("Quick cards & saved notes", icon: "rectangle.stack.fill") { [weak self] in
-            guard let self = self else { return }; self.open(OpenLensCardsViewController(self.glasses))
-        })
-        content.addArrangedSubview(LensUI.button("Presenter & teleprompter", icon: "rectangle.on.rectangle") { [weak self] in
-            guard let self = self else { return }; self.open(OpenLensPresenterViewController(self.glasses))
-        })
-        content.addArrangedSubview(LensUI.button("Focus timer & clock", icon: "timer") { [weak self] in
-            guard let self = self else { return }; self.open(OpenLensFocusViewController(self.glasses))
-        })
-        content.addArrangedSubview(LensUI.section("Control your glasses"))
-        content.addArrangedSubview(LensUI.button("Display & device settings", icon: "slider.horizontal.3") { [weak self] in
-            guard let self = self else { return }; self.open(OpenLensDeviceSettingsViewController(self.glasses))
-        })
-        content.addArrangedSubview(LensUI.button("Device diagnostics & alignment", icon: "stethoscope") { [weak self] in
-            guard let self = self else { return }; self.open(OpenLensDiagnosticsViewController(self.glasses))
-        })
-        content.addArrangedSubview(LensUI.button("Clear ENGO 3 display", icon: "xmark.circle") { [weak self] in
+        device.axis = .vertical
+        device.spacing = 8
+        content.addArrangedSubview(LensUI.card(device))
+        content.addArrangedSubview(LensUI.section("Display", detail: "Put the important things right in front of you."))
+        content.addArrangedSubview(LensUI.pair(
+            LensUI.tile("Text", subtitle: "Send a message", symbol: "text.bubble.fill") { [weak self] in self?.hud(0) },
+            LensUI.tile("Photos", subtitle: "High-contrast HUD", symbol: "photo.fill") { [weak self] in
+                guard let self = self else { return }; self.open(OpenLensImageViewController(self.glasses))
+            }
+        ))
+        content.addArrangedSubview(LensUI.section("AI & speech", detail: "Phone microphone and a private AI relay."))
+        content.addArrangedSubview(LensUI.pair(
+            LensUI.tile("Captions", subtitle: "Live speech text", symbol: "waveform") { [weak self] in self?.hud(1) },
+            LensUI.tile("Ask AI", subtitle: "Relay required", symbol: "sparkles") { [weak self] in self?.hud(2) }
+        ))
+        content.addArrangedSubview(LensUI.section("Everyday tools", detail: "Useful even without an AI subscription."))
+        content.addArrangedSubview(LensUI.pair(
+            LensUI.tile("Quick cards", subtitle: "Saved reminders", symbol: "rectangle.stack.fill") { [weak self] in
+                guard let self = self else { return }; self.open(OpenLensCardsViewController(self.glasses))
+            },
+            LensUI.tile("Presenter", subtitle: "Page through notes", symbol: "rectangle.on.rectangle") { [weak self] in
+                guard let self = self else { return }; self.open(OpenLensPresenterViewController(self.glasses))
+            }
+        ))
+        content.addArrangedSubview(LensUI.pair(
+            LensUI.tile("Focus", subtitle: "Timer and clock", symbol: "timer") { [weak self] in
+                guard let self = self else { return }; self.open(OpenLensFocusViewController(self.glasses))
+            },
+            LensUI.tile("Walking", subtitle: "Route preview", symbol: "figure.walk") { [weak self] in
+                guard let self = self else { return }; self.open(OpenLensRoutePreviewViewController(self.glasses))
+            }
+        ))
+        content.addArrangedSubview(LensUI.section("Device control"))
+        content.addArrangedSubview(LensUI.pair(
+            LensUI.tile("Settings", subtitle: "Brightness, rotate", symbol: "slider.horizontal.3") { [weak self] in
+                guard let self = self else { return }; self.open(OpenLensDeviceSettingsViewController(self.glasses))
+            },
+            LensUI.tile("Diagnostics", subtitle: "Firmware, battery", symbol: "stethoscope") { [weak self] in
+                guard let self = self else { return }; self.open(OpenLensDiagnosticsViewController(self.glasses))
+            }
+        ))
+        content.addArrangedSubview(LensUI.button("Clear glasses display", icon: "xmark.circle") { [weak self] in
             self?.glasses.clear()
         })
         content.addArrangedSubview(LensUI.button("Advanced developer tools", icon: "wrench.and.screwdriver") { [weak self] in
             guard let self = self else { return }; self.open(CommandsMenuTableViewController(self.glasses))
         })
-        content.addArrangedSubview(LensUI.label("Hardware preview: AI and translation require an authenticated HTTPS relay. Some legacy SDK commands may not be supported by ENGO 3 firmware.", size: 12, color: LensUI.muted))
+        content.addArrangedSubview(LensUI.label("Some controls require ENGO 3 firmware support. Open Diagnostics to see device-reported values. AI needs a separate authenticated relay.", size: 12, color: LensUI.muted))
         updateBattery()
     }
 
