@@ -84,9 +84,10 @@ final class OpenLensTextTests: XCTestCase {
                 (size.linesPerPage - 1) * size.lineSpacing + size.fontHeight,
                 OpenLensDisplayGeometry.textImageHeight)
             // Monospaced glyphs are about 0.6*font size wide; enough safety for wide glyphs.
-            XCTAssertLessThanOrEqual(
-                size.charactersPerLine * Double(size.fontHeight) * 0.61 +
-                    2 * Double(OpenLensDisplayGeometry.textInset), 304.0)
+            let textWidth = Double(size.charactersPerLine) * Double(size.fontHeight) * 0.61
+            let availableWidth = Double(OpenLensDisplayGeometry.textImageWidth -
+                                        2 * OpenLensDisplayGeometry.textInset)
+            XCTAssertLessThanOrEqual(textWidth, availableWidth)
         }
     }
 
