@@ -34,7 +34,9 @@ class GlassesTableViewController: UITableViewController {
                 onUpdateStartCallback: { SdkGlassesUpdate in
                  print("onUpdateStartCallback")
              }, onUpdateAvailableCallback: { (SdkGlassesUpdate, authorize: () -> Void) in
-                 authorize()
+                 // This is an experimental app. NEVER automatically flash a device.
+                 // Firmware maintenance belongs in the official ActiveLook application.
+                 print("Firmware available: use the official ActiveLook app to update.")
              }, onUpdateProgressCallback: { SdkGlassesUpdate in
                  print("onUpdateProgressCallback:",
                     " \(SdkGlassesUpdate.getSourceFirmwareVersion()) -> \(SdkGlassesUpdate.getTargetFirmwareVersion())",
@@ -116,7 +118,10 @@ class GlassesTableViewController: UITableViewController {
                 if !glasses.isFirmwareAtLeast(version: "4.0") {
                     print("OpenLens: legacy firmware comparison failed; connected device permitted")
                 }
-                self.navigationController?.pushViewController(OpenLensHomeViewController(glasses), animated: true)
+                DispatchQueue.main.async {
+                    self.tableView.deselectRow(at: indexPath, animated: true)
+                    self.navigationController?.pushViewController(OpenLensHomeViewController(glasses), animated: true)
+                }
             }, onGlassesDisconnected: { [weak self] in
                 guard let self = self else { return }
                 self.connecting = false
@@ -127,7 +132,7 @@ class GlassesTableViewController: UITableViewController {
                     self.navigationController?.popToRootViewController(animated: true)
                 }))
                 
-                self.navigationController?.present(alert, animated: true)
+                DispatchQueue.main.async { self.navigationController?.present(alert, animated: true) }
                 
             }, onConnectionError: { [weak self] (error: Error) in
                 guard let self = self else { return }
@@ -137,7 +142,7 @@ class GlassesTableViewController: UITableViewController {
                 
                 let alert = UIAlertController(title: "Error", message: "Connection to glasses failed: \(error.localizedDescription)", preferredStyle: .alert)
                 alert.addAction(UIAlertAction(title: "OK", style: .default, handler: nil))
-                self.present(alert, animated: true)
+                DispatchQueue.main.async { self.present(alert, animated: true) }
             })
 
         connectionTimer = Timer.scheduledTimer(withTimeInterval: connectionTimeoutDuration, repeats: false, block: { [weak self] (timer) in
@@ -177,7 +182,7 @@ class GlassesTableViewController: UITableViewController {
         
         activeLook.startScanning(
             onGlassesDiscovered: { [weak self] (discoveredGlasses: DiscoveredGlasses) in
-                self?.addDiscoveredGlasses(discoveredGlasses)
+                DispatchQueue.main.async { self?.addDiscoveredGlasses(discoveredGlasses) }
 
             }, onScanError: { [weak self] (error: Error) in
                 DispatchQueue.main.async {
