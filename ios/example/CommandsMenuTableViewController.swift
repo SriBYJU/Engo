@@ -173,7 +173,7 @@ final class OpenLensHUDViewController: UIViewController, CLLocationManagerDelega
     private let nextPageButton = UIButton(type: .system)
     private var visiblePages: [[String]] = []
     private var currentPage = 0
-    private let preview = UILabel()
+    private let preview = UIImageView()
     private let pagesButton = UIButton(type: .system)
     private var fullMessage = ""
     private var fullHeading = ""
@@ -233,14 +233,13 @@ final class OpenLensHUDViewController: UIViewController, CLLocationManagerDelega
         }
         send.addTarget(self, action: #selector(sendPressed), for: .touchUpInside)
         mic.addTarget(self, action: #selector(micPressed), for: .touchUpInside)
-        preview.numberOfLines = 0
-        preview.textAlignment = .center
-        preview.textColor = accent
-        preview.font = .monospacedSystemFont(ofSize: 14, weight: .medium)
-        preview.backgroundColor = UIColor(red: 0.07, green: 0.15, blue: 0.10, alpha: 1)
+        // Show the actual bitmap being sent, not an unrelated text preview.
+        preview.contentMode = .scaleAspectFit
+        preview.backgroundColor = .black
         preview.layer.cornerRadius = 12
         preview.layer.masksToBounds = true
-        preview.heightAnchor.constraint(greaterThanOrEqualToConstant: 150).isActive = true
+        preview.heightAnchor.constraint(equalToConstant: 226).isActive = true
+        preview.accessibilityLabel = "Preview of the exact text image sent to the glasses"
         status.text = "Connected via official ActiveLook SDK."
         status.numberOfLines = 0
         status.textColor = .lightGray
@@ -297,7 +296,7 @@ final class OpenLensHUDViewController: UIViewController, CLLocationManagerDelega
             stack.trailingAnchor.constraint(equalTo: scroll.contentLayoutGuide.trailingAnchor, constant: -20),
             stack.widthAnchor.constraint(equalTo: scroll.frameLayoutGuide.widthAnchor, constant: -40)
         ])
-        preview.text = "Preview appears here after sending."
+        preview.image = OpenLensCanvas.render(lines: ["HELLO"], size: .selected)
         modeChanged()
     }
 
@@ -330,7 +329,7 @@ final class OpenLensHUDViewController: UIViewController, CLLocationManagerDelega
 
     private func updateFontDetail() {
         let size = OpenLensTextSize.selected
-        fontDetail.text = "\(size.name) • \(size.fontHeight)px • \(size.charactersPerLine) characters/line • \(size.linesPerPage) lines/page"
+        fontDetail.text = "\(size.name) • \(size.fontHeight)px high-contrast image text • \(size.charactersPerLine) chars/line • \(size.linesPerPage) lines/page"
     }
 
     @objc private func fontChanged() {
@@ -364,8 +363,7 @@ final class OpenLensHUDViewController: UIViewController, CLLocationManagerDelega
         let lines = visiblePages[currentPage]
         // Include page numbers in the phone UI rather than fitting an oversized
         // header on the 304x256 glass.
-        OpenLensCanvas.show(glasses, title: fullHeading, lines: lines)
-        preview.text = lines.joined(separator: "\n")
+        preview.image = OpenLensCanvas.show(glasses, title: fullHeading, lines: lines)
         pageCounter.text = "PAGE \(currentPage + 1) OF \(visiblePages.count)"
         previousButton.isEnabled = currentPage > 0
         nextPageButton.isEnabled = currentPage + 1 < visiblePages.count
@@ -446,7 +444,7 @@ final class OpenLensHUDViewController: UIViewController, CLLocationManagerDelega
                     if let speech = result?.bestTranscription.formattedString {
                         self.transcript = speech
                         self.field.text = speech
-                        if self.segment.selectedSegmentIndex == 1 && Date().timeIntervalSince(self.lastUpdate) > 1.8 {
+                        if self.segment.selectedSegmentIndex == 1 && Date().timeIntervalSince(self.lastUpdate) > 5.0 {
                             self.draw("OPENLENS / LIVE CAPTIONS", speech)
                         }
                     }
