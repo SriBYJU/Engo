@@ -2,7 +2,7 @@ import Foundation
 
 /// Pure Foundation rendering primitives shared by the iOS client and SwiftPM tests.
 public enum OpenLensText {
-    public static let lineWidth = 14
+    public static let lineWidth = 12
     public static let linesPerPage = 4
 
     /// The legacy hardware font only supports a limited ASCII subset.
