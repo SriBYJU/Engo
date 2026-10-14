@@ -10,6 +10,8 @@
 	<string>Transcribe speech when you choose live captions.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Find walking routes from your current position when requested.</string>
+	<key>UIUserInterfaceStyle</key>
+	<string>Dark</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
