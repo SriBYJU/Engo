@@ -560,6 +560,7 @@ final class OpenLensRoutePreviewViewController: UIViewController, CLLocationMana
     private var steps: [MKRoute.Step] = []
     private var stepIndex = 0
     private var textPages: [[String]] = []
+    private var routeFontSize: OpenLensTextSize = .selected
     private var textPageIndex = 0
     private var lastMapRefresh = Date.distantPast
     private var lastLocation: CLLocation?
@@ -582,7 +583,7 @@ final class OpenLensRoutePreviewViewController: UIViewController, CLLocationMana
         locationManager.distanceFilter = 15
 
         content.addArrangedSubview(LensUI.section("Walk with OpenLens",
-            detail: "Choose full written directions or a real MapKit street map on your glasses. Maps are previews, not automatic AR navigation."))
+            detail: "See every street name in text or a real MapKit mini-map. Text auto-fits short turns on one screen. Not automatic AR navigation."))
         destination.placeholder = "Destination name or street address"
         destination.textColor = .white
         destination.font = .systemFont(ofSize: 16)
@@ -686,6 +687,7 @@ final class OpenLensRoutePreviewViewController: UIViewController, CLLocationMana
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         active = true
+        if followSwitch.isOn { locationManager.startUpdatingLocation() }
     }
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
@@ -817,9 +819,17 @@ final class OpenLensRoutePreviewViewController: UIViewController, CLLocationMana
         let distance = Int(step.distance.rounded())
         position.text = "TURN \(stepIndex + 1) OF \(steps.count) • ~\(distance) m"
         instruction.text = step.instructions
-        // Keep the ENTIRE instruction as page state, rather than showing only
-        // page one and dropping the street name at the end.
-        textPages = OpenLensText.pages(step.instructions, size: .selected)
+        // Prefer the selected font, but automatically reduce it if the whole
+        // turn (including the road name at the end) will fit on one screen.
+        // Don't change the user's global text-size preference.
+        let preferred = OpenLensTextSize.selected
+        let candidates = OpenLensTextSize.allCases
+            .filter { $0.rawValue <= preferred.rawValue }
+            .sorted { $0.rawValue > $1.rawValue }
+        routeFontSize = candidates.first {
+            OpenLensText.pages(step.instructions, size: $0).count == 1
+        } ?? .small
+        textPages = OpenLensText.pages(step.instructions, size: routeFontSize)
         textPageIndex = 0
         if step.polyline.pointCount > 0 {
             let bounds = step.polyline.boundingMapRect
@@ -872,9 +882,12 @@ final class OpenLensRoutePreviewViewController: UIViewController, CLLocationMana
         guard textPages.indices.contains(textPageIndex) else { return }
         let lines = textPages[textPageIndex]
         glassesPreview.image = OpenLensCanvas.show(glasses,
-            title: "WALK TURN \(stepIndex + 1)", lines: lines)
+            title: "WALK TURN \(stepIndex + 1)", lines: lines, size: routeFontSize)
         updateControls()
-        status.text = "Showing instruction page \(textPageIndex + 1) of \(textPages.count) for turn \(stepIndex + 1). All street names remain available. Allow ~8 seconds between frames."
+        let fitNote = routeFontSize != OpenLensTextSize.selected
+            ? " Auto-fitted to \(routeFontSize.name) to show the street name."
+            : ""
+        status.text = "Instruction page \(textPageIndex + 1) of \(textPages.count), turn \(stepIndex + 1).\(fitNote) Use Next page if necessary. Allow ~8 seconds between frames."
     }
     private func renderMiniMap() {
         guard let route = route, steps.indices.contains(stepIndex) else { return }
