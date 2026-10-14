@@ -271,30 +271,30 @@ final class OpenLensDeviceSettingsViewController: UIViewController {
         super.viewDidLoad()
         title = "Glasses settings"
         let content = LensUI.stack(in: view)
-        content.addArrangedSubview(LensUI.section("Text size", detail: "Choose readable 24px, 35px or 49px lettering. Larger settings automatically split long text into more pages."))
+        content.addArrangedSubview(LensUI.section("Text size", detail: "Choose small, medium or large high-contrast text. OpenLens now draws words using the same image system as working photos."))
         textSizeControl.selectedSegmentIndex = OpenLensTextSize.selected.rawValue
         textSizeControl.selectedSegmentTintColor = LensUI.accent
         textSizeControl.addTarget(self, action: #selector(textSizeChanged), for: .valueChanged)
         content.addArrangedSubview(textSizeControl)
         content.addArrangedSubview(textSizeDetail)
         updateTextSizeDetail()
-        content.addArrangedSubview(LensUI.section("Display orientation", detail: "Switch if text appears upside down, then tap Test."))
-        orientation.selectedSegmentIndex = OpenLensOrientation.isRotated ? 1 : 0
+        content.addArrangedSubview(LensUI.section("Display orientation", detail: "Bitmap text follows the photo orientation by default. Flip only if the preview appears upside down in the glasses."))
+        orientation.selectedSegmentIndex = OpenLensBitmapSettings.rotated ? 1 : 0
         orientation.selectedSegmentTintColor = LensUI.accent
         orientation.addTarget(self, action: #selector(orientationChanged), for: .valueChanged)
         content.addArrangedSubview(orientation)
         content.addArrangedSubview(LensUI.button("Show orientation test", icon: "textformat") { [weak self] in self?.testOrientation() })
-        content.addArrangedSubview(LensUI.section("Text position", detail: "Move the HUD within your field of view; text starts safely inside the screen."))
-        textHorizontal.minimumValue = -32
-        textHorizontal.maximumValue = 32
-        textHorizontal.value = Float(OpenLensOrientation.horizontalOffset)
+        content.addArrangedSubview(LensUI.section("Text position", detail: "Move the full-screen text image slightly left, right, up or down."))
+        textHorizontal.minimumValue = -24
+        textHorizontal.maximumValue = 24
+        textHorizontal.value = Float(OpenLensBitmapSettings.offsetX)
         textHorizontal.minimumTrackTintColor = LensUI.accent
         textHorizontal.addTarget(self, action: #selector(textPositionChanged), for: .valueChanged)
         content.addArrangedSubview(LensUI.label("Move left / right", size: 14, color: LensUI.muted))
         content.addArrangedSubview(textHorizontal)
-        textVertical.minimumValue = -32
-        textVertical.maximumValue = 32
-        textVertical.value = Float(OpenLensOrientation.verticalOffset)
+        textVertical.minimumValue = -24
+        textVertical.maximumValue = 24
+        textVertical.value = Float(OpenLensBitmapSettings.offsetY)
         textVertical.minimumTrackTintColor = LensUI.accent
         textVertical.addTarget(self, action: #selector(textPositionChanged), for: .valueChanged)
         content.addArrangedSubview(LensUI.label("Move up / down", size: 14, color: LensUI.muted))
@@ -342,26 +342,26 @@ final class OpenLensDeviceSettingsViewController: UIViewController {
     }
 
     @objc private func orientationChanged() {
-        OpenLensOrientation.isRotated = orientation.selectedSegmentIndex == 1
-        status.text = "Orientation preference saved. Tap Show orientation test."
+        OpenLensBitmapSettings.rotated = orientation.selectedSegmentIndex == 1
+        testOrientation()
     }
     private func testOrientation() {
         let size = OpenLensTextSize.selected
-        OpenLensCanvas.show(glasses, title: "SIZE TEST", message: "HELLO", size: size)
-        status.text = "Queued \(size.name) \(size.fontHeight)px alignment test. Check text size and position through your glasses."
+        OpenLensCanvas.show(glasses, title: "BITMAP TEXT TEST", message: "HELLO", size: size)
+        status.text = "A single HELLO image was queued across the full screen. Check whether every letter appears upright and centered."
     }
     private func updatePositionLabel() {
-        positionLabel.text = "Text offset: horizontal \(OpenLensOrientation.horizontalOffset) px, vertical \(OpenLensOrientation.verticalOffset) px"
+        positionLabel.text = "Text offset: horizontal \(OpenLensBitmapSettings.offsetX) px, vertical \(OpenLensBitmapSettings.offsetY) px"
     }
     @objc private func textPositionChanged() {
-        OpenLensOrientation.horizontalOffset = Int(textHorizontal.value.rounded())
-        OpenLensOrientation.verticalOffset = Int(textVertical.value.rounded())
+        OpenLensBitmapSettings.offsetX = Int(textHorizontal.value.rounded())
+        OpenLensBitmapSettings.offsetY = Int(textVertical.value.rounded())
         updatePositionLabel()
         status.text = "Position saved for future text. Tap Show orientation test to preview it."
     }
     private func resetTextPosition() {
-        OpenLensOrientation.horizontalOffset = 0
-        OpenLensOrientation.verticalOffset = 0
+        OpenLensBitmapSettings.offsetX = 0
+        OpenLensBitmapSettings.offsetY = 0
         textHorizontal.value = 0
         textVertical.value = 0
         updatePositionLabel()
