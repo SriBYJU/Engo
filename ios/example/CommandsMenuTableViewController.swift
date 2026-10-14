@@ -164,7 +164,15 @@ final class OpenLensHUDViewController: UIViewController, CLLocationManagerDelega
     private let modes = ["TEXT", "CAPTIONS", "AI"]
     private var translationLanguage = "en"
     private let segment = UISegmentedControl(items: ["Text", "Captions", "AI"])
-    private let field = UITextField()
+    private let field = UITextView()
+    private let inputLabel = UILabel()
+    private let fontSelector = UISegmentedControl(items: OpenLensTextSize.allCases.map(\.name))
+    private let fontDetail = UILabel()
+    private let pageCounter = UILabel()
+    private let previousButton = UIButton(type: .system)
+    private let nextPageButton = UIButton(type: .system)
+    private var visiblePages: [[String]] = []
+    private var currentPage = 0
     private let preview = UILabel()
     private let pagesButton = UIButton(type: .system)
     private var fullMessage = ""
@@ -202,13 +210,17 @@ final class OpenLensHUDViewController: UIViewController, CLLocationManagerDelega
         segment.selectedSegmentIndex = initialMode
         segment.selectedSegmentTintColor = accent
         segment.addTarget(self, action: #selector(modeChanged), for: .valueChanged)
-        field.placeholder = "Your message"
+        inputLabel.text = "Type your message"
+        inputLabel.textColor = .lightGray
+        inputLabel.font = .systemFont(ofSize: 14, weight: .medium)
+        field.accessibilityLabel = "Message to display"
+        field.font = .systemFont(ofSize: 17)
+        field.autocorrectionType = .yes
+        field.textContainerInset = UIEdgeInsets(top: 14, left: 11, bottom: 14, right: 11)
         field.backgroundColor = UIColor(white: 0.17, alpha: 1)
         field.textColor = .white
         field.layer.cornerRadius = 10
-        field.heightAnchor.constraint(equalToConstant: 48).isActive = true
-        field.leftView = UIView(frame: CGRect(x: 0, y: 0, width: 12, height: 1))
-        field.leftViewMode = .always
+        field.heightAnchor.constraint(equalToConstant: 126).isActive = true
         field.autocapitalizationType = .sentences
         send.setTitle("Show on glasses", for: .normal)
         mic.setTitle("Start listening", for: .normal)
@@ -233,12 +245,40 @@ final class OpenLensHUDViewController: UIViewController, CLLocationManagerDelega
         status.numberOfLines = 0
         status.textColor = .lightGray
         status.font = .systemFont(ofSize: 12)
-        pagesButton.setTitle("Open full text in Presenter →", for: .normal)
+        fontSelector.selectedSegmentTintColor = accent
+        fontSelector.selectedSegmentIndex = OpenLensTextSize.selected.rawValue
+        fontSelector.addTarget(self, action: #selector(fontChanged), for: .valueChanged)
+        fontDetail.textColor = .lightGray
+        fontDetail.font = .systemFont(ofSize: 13)
+        fontDetail.numberOfLines = 0
+        updateFontDetail()
+
+        previousButton.configuration = .filled()
+        previousButton.configuration?.title = "◀ Previous"
+        nextPageButton.configuration = .filled()
+        nextPageButton.configuration?.title = "Next ▶"
+        previousButton.addTarget(self, action: #selector(previousTextPage), for: .touchUpInside)
+        nextPageButton.addTarget(self, action: #selector(nextTextPage), for: .touchUpInside)
+        previousButton.isEnabled = false
+        nextPageButton.isEnabled = false
+        pageCounter.textColor = accent
+        pageCounter.textAlignment = .center
+        pageCounter.font = .monospacedSystemFont(ofSize: 15, weight: .semibold)
+        pageCounter.text = "Send a message to begin"
+        let pager = UIStackView(arrangedSubviews: [previousButton, nextPageButton])
+        pager.axis = .horizontal
+        pager.distribution = .fillEqually
+        pager.spacing = 12
+        pagesButton.setTitle("Open in Presenter for auto-advance →", for: .normal)
         pagesButton.setTitleColor(accent, for: .normal)
         pagesButton.titleLabel?.font = .systemFont(ofSize: 15, weight: .semibold)
         pagesButton.addTarget(self, action: #selector(openPages), for: .touchUpInside)
         pagesButton.isHidden = true
-        let stack = UIStackView(arrangedSubviews: [heading, title, subtitle, segment, field, send, mic, preview, pagesButton, status])
+        let sizeTitle = UILabel()
+        sizeTitle.text = "TEXT SIZE ON GLASSES"
+        sizeTitle.textColor = accent
+        sizeTitle.font = .systemFont(ofSize: 13, weight: .bold)
+        let stack = UIStackView(arrangedSubviews: [heading, title, subtitle, segment, inputLabel, field, sizeTitle, fontSelector, fontDetail, send, mic, preview, pageCounter, pager, pagesButton, status])
         stack.axis = .vertical
         stack.spacing = 17
         stack.translatesAutoresizingMaskIntoConstraints = false
@@ -270,28 +310,70 @@ final class OpenLensHUDViewController: UIViewController, CLLocationManagerDelega
         stopSpeech(submit: false)
         let i = segment.selectedSegmentIndex
         let labels = ["Your message", "Use iPhone microphone", "Ask AI (needs your HTTPS relay)"]
-        field.placeholder = labels[i]
+        inputLabel.text = labels[i]
+        field.accessibilityLabel = labels[i]
         send.setTitle(i == 2 ? "Ask AI" : "Show on glasses", for: .normal)
         mic.isHidden = i == 0
         status.text = i == 1 ? "Start listening to show live captions." : i == 2 ? "AI requires a private relay configured in Options." : "Type text to send to the glasses."
     }
 
-    // Reuses the same vendor SDK calls from GraphicsCommandsViewController.
-    // Avoid Unicode in the legacy hardware font; break into short lines.
+    private func updateFontDetail() {
+        let size = OpenLensTextSize.selected
+        fontDetail.text = "\(size.name) • \(size.fontHeight)px • \(size.charactersPerLine) characters/line • \(size.linesPerPage) lines/page"
+    }
+
+    @objc private func fontChanged() {
+        guard let size = OpenLensTextSize(rawValue: fontSelector.selectedSegmentIndex) else { return }
+        OpenLensTextSize.selected = size
+        updateFontDetail()
+        if !fullMessage.isEmpty {
+            // Recompute every page for the chosen hardware font, then show page one
+            // (or the latest page for streaming captions). No content is discarded.
+            rebuildPages(startAtLatest: fullHeading.contains("CAPTIONS"))
+        } else {
+            status.text = "\(size.name) selected. Text will use \(size.fontHeight)px characters."
+        }
+    }
+
     private func draw(_ heading: String, _ message: String) {
-        let pages = OpenLensText.pages(message)
-        let latestCaptions = heading.contains("CAPTIONS")
-        let selected = latestCaptions ? (pages.last ?? []) : (pages.first ?? [])
-        OpenLensCanvas.show(glasses, title: heading, lines: selected)
         fullHeading = heading
         fullMessage = message
-        pagesButton.isHidden = pages.count < 2
-        let pageLabel = latestCaptions ? pages.count : 1
-        preview.text = heading + "\n\n" + selected.joined(separator: "\n")
+        rebuildPages(startAtLatest: heading.contains("CAPTIONS"))
         lastUpdate = Date()
-        status.text = pages.count > 1
-            ? "Page \(pageLabel) of \(pages.count) queued. Open Presenter to view all pages."
-            : "Display commands queued. Confirm the text on your ENGO 3."
+    }
+
+    private func rebuildPages(startAtLatest: Bool) {
+        visiblePages = OpenLensText.pages(fullMessage, size: .selected)
+        currentPage = startAtLatest ? max(0, visiblePages.count - 1) : 0
+        showCurrentPage()
+    }
+
+    private func showCurrentPage() {
+        guard visiblePages.indices.contains(currentPage) else { return }
+        let lines = visiblePages[currentPage]
+        // Include page numbers in the phone UI rather than fitting an oversized
+        // header on the 304x256 glass.
+        OpenLensCanvas.show(glasses, title: fullHeading, lines: lines)
+        preview.text = lines.joined(separator: "\n")
+        pageCounter.text = "PAGE \(currentPage + 1) OF \(visiblePages.count)"
+        previousButton.isEnabled = currentPage > 0
+        nextPageButton.isEnabled = currentPage + 1 < visiblePages.count
+        pagesButton.isHidden = visiblePages.count < 2
+        status.text = visiblePages.count > 1
+            ? "Page \(currentPage + 1)/\(visiblePages.count) queued. Use Previous / Next to see the entire message."
+            : "Text queued for your glasses; confirm it is readable."
+    }
+
+    @objc private func previousTextPage() {
+        guard currentPage > 0 else { return }
+        currentPage -= 1
+        showCurrentPage()
+    }
+
+    @objc private func nextTextPage() {
+        guard currentPage + 1 < visiblePages.count else { return }
+        currentPage += 1
+        showCurrentPage()
     }
 
     @objc private func openPages() {
