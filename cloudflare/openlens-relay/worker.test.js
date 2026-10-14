@@ -22,6 +22,7 @@ test("rejects invalid methods and malformed requests", async () => {
   assert.equal((await worker.fetch(post({ mode: "ai", text: "" }), env)).status, 400);
   assert.equal((await worker.fetch(post({ mode: "translate", text: "Hi", target_language: "zz" }), env)).status, 400);
   assert.equal((await worker.fetch(post({ mode: "ai", text: "x".repeat(3001) }), env)).status, 400);
+  assert.equal((await worker.fetch(post({ mode: "ai", text: "Hello", task: "private-secret-mode" }), env)).status, 400);
   assert.equal((await worker.fetch(new Request("https://openlens.example/other", { headers: auth }), env)).status, 404);
   assert.equal((await worker.fetch(new Request("https://openlens.example/openlens", { method: "PUT", headers: auth }), env)).status, 405);
 });
@@ -75,4 +76,32 @@ test("translation specifies the requested language and protects street names", a
     assert.match(sent.instructions, /Spanish/);
     assert.match(sent.instructions, /street names/);
   } finally { globalThis.fetch = realFetch; }
+});
+
+
+test("AI task modes produce specific instructions without changing secret handling", async () => {
+  const originalFetch = globalThis.fetch;
+  const instructions = new Map();
+  globalThis.fetch = async (_url, options) => {
+    const json = JSON.parse(options.body);
+    instructions.set(json.input, json.instructions);
+    return new Response(JSON.stringify({
+      output: [{ type: "message", content: [{ type: "output_text", text: "Completed." }] }]
+    }), { status: 200 });
+  };
+  try {
+    for (const task of ["general", "explain", "summarize", "rewrite", "brainstorm"]) {
+      const response = await worker.fetch(post({ mode: "ai", text: task, task }), env);
+      assert.equal(response.status, 200);
+    }
+    assert.match(instructions.get("general"), /Answer/);
+    assert.match(instructions.get("explain"), /Explain/);
+    assert.match(instructions.get("summarize"), /key facts/);
+    assert.match(instructions.get("rewrite"), /Rewrite/);
+    assert.match(instructions.get("brainstorm"), /4 practical/);
+    for (const instructionsText of instructions.values()) {
+      assert.doesNotMatch(instructionsText, /test-api-key|this-is-a-demo-only-token/);
+      assert.match(instructionsText, /smart-glasses/);
+    }
+  } finally { globalThis.fetch = originalFetch; }
 });
