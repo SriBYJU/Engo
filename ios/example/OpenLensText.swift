@@ -122,6 +122,18 @@ public enum OpenLensText {
         pages(message, width: size.charactersPerLine, height: size.linesPerPage)
     }
 
+    /// Navigation directions are different from free-form notes: whenever
+    /// possible, include the complete street name on the first HUD screen.
+    /// Never enlarge beyond the user's chosen font. If no size fits, return
+    /// Small and keep all remaining text available through page controls.
+    public static func bestFittingSize(_ message: String,
+                                      preferred: OpenLensTextSize) -> OpenLensTextSize {
+        let candidates = OpenLensTextSize.allCases
+            .filter { $0.rawValue <= preferred.rawValue }
+            .sorted { $0.rawValue > $1.rawValue }
+        return candidates.first { pages(message, size: $0).count == 1 } ?? .small
+    }
+
     /// Floyd–Steinberg dithering for black-and-white display previews.
     /// Every output pixel is exactly 0 or 255, suitable for the SDK 1bpp encoder.
     public static func dither(_ luminance: [Double], width: Int) -> [UInt8] {
