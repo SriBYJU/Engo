@@ -5,7 +5,7 @@ This branch extends the user's previously working ActiveLook iOS demo instead of
 ## The new companion app
 
 - **Connection and dashboard:** automatic initial Bluetooth scan, manual rescan, ENGO 3 connection and battery status, clear disconnect and grouped two-column feature tiles.
-- **Text and live captions:** typed text to display, speech recognition via the iPhone microphone, language choices including English, French, Spanish, Hindi and Telugu where supported, readable Latin transliteration for the legacy hardware font, consistent rotation and mirrored text anchors, selectable 24/35/49px hardware fonts (Medium 35px by default), automatic per-size wrapping and spacing, multiline text editor, direct Previous/Next navigation, safe margins, horizontal/vertical position calibration and Presenter handoff.
+- **Text and live captions:** typed text to display, speech recognition via the iPhone microphone, language choices including English, French, Spanish, Hindi and Telugu where supported, readable Latin transliteration, reliable black-and-white bitmap text using the *same* image-streaming API as Photos (avoids broken native text rotation), 304×240 frame, Small 30px/Medium 42px/Large 56px bitmap font sizes, automatic per-size wrapping and spacing, multiline editor, exact bitmap preview, direct Previous/Next pages, rotated image control, X/Y bitmap-text positioning and Presenter handoff.
 - **Photo display:** photo picker with Small 160×96, Medium 208×144, Large 240×192 (default) and Full 304×240 size choices, full-screen coverage preview, built-in test pattern, letterbox or fill crop, 1-bit high contrast, 1-bit Floyd–Steinberg dithering, grayscale using the SDK's compressed 4-bit stream, invert and 180-degree rotation. The 1-bit path avoids the SDK's generic x/y coordinate bug. No immediate image deletion.
 - **Quick cards:** four starter cards, custom saved cards on the iPhone, edit and delete, tap to open on glasses.
 - **Presenter:** paste a talk or notes; page through long text with Previous/Next; change text size and repaginate the complete script; optional 10-second auto-advance while this screen is open.
@@ -20,12 +20,12 @@ Firmware update authorization is intentionally NOT automatic in this experimenta
 
 ## Verification
 
-- Fifteen SwiftPM unit tests, including font presets, per-size text pagination and content preservation, long-word endings and image-size geometry, are covered by: swift test --disable-sandbox.
+- Sixteen SwiftPM unit tests, including the user's exact clipped sentence, full-screen bitmap geometry, font-size presets, content preservation, long-word endings and image-size geometry, are covered by `swift test --disable-sandbox`.
 - GitHub Actions runs the unsigned iOS simulator build on macOS, plus a new Ubuntu Swift core-tests job.
 - An early simulator build caught two UIKit property collisions with the word 'next'; they were fixed and later simulator builds passed.
 - Unit tests cover line wrapping, long words, pagination, unsupported-character handling, Hindi and Telugu romanization, countdown formatting, black-and-white dithering and JSON card serialization.
 
-**Hardware-dependent tests are still required.** Sending a BLE command or queuing an image is not proof it appeared in the optics. ENGO 3 firmware-specific settings, actual transfer completion, photo orientation, ASR language availability and the appearance of all HUD elements cannot be verified without the physical device. Begin photo testing with the built-in high-contrast test pattern at Large, then compare each selectable size. The Full preset fills nearly the whole microdisplay but may be clipped by the optical field of view.
+**Hardware-dependent tests are still required.** The shared text renderer now queues and coalesces 1-bit bitmap frames to avoid overlapping incomplete BLE transfers, but real transport confirmation requires ENGO 3.  Sending a BLE command or queuing an image is not proof it appeared in the optics. ENGO 3 firmware-specific settings, actual transfer completion, photo orientation, ASR language availability and the appearance of all HUD elements cannot be verified without the physical device. Begin photo testing with the built-in high-contrast test pattern at Large, then compare each selectable size. The Full preset fills nearly the whole microdisplay but may be clipped by the optical field of view.
 
 ## Install on the existing Mac project
 
