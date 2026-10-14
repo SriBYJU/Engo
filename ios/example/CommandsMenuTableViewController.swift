@@ -180,6 +180,10 @@ final class OpenLensHUDViewController: UIViewController, CLLocationManagerDelega
     private let status = UILabel()
     private let mic = UIButton(type: .system)
     private let send = UIButton(type: .system)
+    private let relaySetup = UIButton(type: .system)
+    private let relayCheck = UIButton(type: .system)
+    private let relayExplanation = UILabel()
+    private var relayTask: URLSessionDataTask?
 
     init(_ glasses: Glasses, initialMode: Int = 0) {
         self.glasses = glasses
@@ -273,11 +277,28 @@ final class OpenLensHUDViewController: UIViewController, CLLocationManagerDelega
         pagesButton.titleLabel?.font = .systemFont(ofSize: 15, weight: .semibold)
         pagesButton.addTarget(self, action: #selector(openPages), for: .touchUpInside)
         pagesButton.isHidden = true
+        relaySetup.configuration = .borderedProminent()
+        relaySetup.configuration?.title = "Set up AI"
+        relaySetup.addTarget(self, action: #selector(setupRelayPressed), for: .touchUpInside)
+        relayCheck.configuration = .bordered()
+        relayCheck.configuration?.title = "Test AI connection"
+        relayCheck.addTarget(self, action: #selector(testRelayConnection), for: .touchUpInside)
+        relayExplanation.numberOfLines = 0
+        relayExplanation.textColor = .lightGray
+        relayExplanation.font = .systemFont(ofSize: 13)
+        relayExplanation.text = "Connect a private Cloudflare relay before AI or translation can work."
         let sizeTitle = UILabel()
         sizeTitle.text = "TEXT SIZE ON GLASSES"
         sizeTitle.textColor = accent
         sizeTitle.font = .systemFont(ofSize: 13, weight: .bold)
-        let stack = UIStackView(arrangedSubviews: [heading, title, subtitle, segment, inputLabel, field, sizeTitle, fontSelector, fontDetail, send, mic, preview, pageCounter, pager, pagesButton, status])
+        let relayRow = UIStackView(arrangedSubviews: [relaySetup, relayCheck])
+        relayRow.axis = .horizontal
+        relayRow.distribution = .fillEqually
+        relayRow.spacing = 10
+        let stack = UIStackView(arrangedSubviews: [heading, title, subtitle, segment, inputLabel, field, sizeTitle, fontSelector, fontDetail, send, mic, relayExplanation, relayRow, preview, pageCounter, pager, pagesButton, status])
+        relaySetup.isHidden = true
+        relayCheck.isHidden = true
+        relayExplanation.isHidden = true
         stack.axis = .vertical
         stack.spacing = 17
         stack.translatesAutoresizingMaskIntoConstraints = false
@@ -314,6 +335,8 @@ final class OpenLensHUDViewController: UIViewController, CLLocationManagerDelega
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
         stopSpeech(submit: false)
+        relayTask?.cancel()
+        relayTask = nil
     }
 
     @objc private func modeChanged() {
@@ -324,7 +347,19 @@ final class OpenLensHUDViewController: UIViewController, CLLocationManagerDelega
         field.accessibilityLabel = labels[i]
         send.setTitle(i == 2 ? "Ask AI" : "Show on glasses", for: .normal)
         mic.isHidden = i == 0
-        status.text = i == 1 ? "Start listening to show live captions." : i == 2 ? "AI requires a private relay configured in Options." : "Type text to send to the glasses."
+        relaySetup.isHidden = i != 2
+        relayCheck.isHidden = i != 2
+        relayExplanation.isHidden = i != 2
+        if i == 2 {
+            let saved = UserDefaults.standard.string(forKey: "openlens.relay") ?? ""
+            relayExplanation.text = saved.isEmpty
+                ? "AI needs a one-time private relay setup. Tap Set up AI."
+                : "Relay URL saved. Tap Test AI connection before asking your first question."
+        }
+        status.text = i == 1 ? "Start listening to show live captions." :
+            i == 2 ? (UserDefaults.standard.string(forKey: "openlens.relay") == nil
+                ? "AI is not configured yet. Tap Set up AI." : "AI configured locally. Check the connection.")
+            : "Type text to send to the glasses."
     }
 
     private func updateFontDetail() {
@@ -480,31 +515,95 @@ final class OpenLensHUDViewController: UIViewController, CLLocationManagerDelega
         callRelay(mode: "ai", text: question, targetLanguage: "en")
     }
 
-    private func callRelay(mode: String, text: String, targetLanguage: String) {
-        guard let raw = UserDefaults.standard.string(forKey: "openlens.relay"),
-              let url = URL(string: raw), url.scheme == "https" else {
-            status.text = "Set your HTTPS AI relay URL in Settings first."
+    private func relayURL() -> URL? {
+        guard let raw = UserDefaults.standard.string(forKey: "openlens.relay")?
+                .trimmingCharacters(in: .whitespacesAndNewlines),
+              let url = URL(string: raw), url.scheme?.lowercased() == "https",
+              url.host != nil else { return nil }
+        return url
+    }
+
+    @objc private func setupRelayPressed() { configureRelay() }
+
+    @objc private func testRelayConnection() {
+        guard let endpoint = relayURL(), let token = loadRelayToken(), !token.isEmpty else {
+            status.text = "Add an HTTPS relay URL and its private client token first."
+            configureRelay()
             return
         }
+        relayTask?.cancel()
+        let url = endpoint.appendingPathComponent("health")
+        var request = URLRequest(url: url)
+        request.setValue("Bearer " + token, forHTTPHeaderField: "Authorization")
+        request.timeoutInterval = 12
+        status.text = "Checking private AI relay…"
+        relayTask = URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
+            let code = (response as? HTTPURLResponse)?.statusCode ?? 0
+            let payload = data.flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }
+            DispatchQueue.main.async {
+                guard let self = self else { return }
+                if (200..<300).contains(code), payload?["status"] as? String == "ok" {
+                    let ready = payload?["configured"] as? Bool ?? false
+                    self.status.text = ready
+                        ? "AI relay connected. You can now ask questions or translate."
+                        : "Relay is online, but server AI credentials or model are missing."
+                } else if code == 401 {
+                    self.status.text = "Relay rejected the client token. Check the token in Set up AI."
+                } else {
+                    self.status.text = error?.localizedDescription ??
+                        "AI health check failed (HTTP \(code)). Confirm URL and deployment."
+                }
+            }
+        }
+        relayTask?.resume()
+    }
+
+    private func callRelay(mode: String, text: String, targetLanguage: String) {
+        guard let url = relayURL(), let token = loadRelayToken(), !token.isEmpty else {
+            status.text = "AI is not connected. Tap Set up AI and then Test AI connection."
+            return
+        }
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { status.text = "Type or dictate a question first."; return }
+        guard trimmed.count <= 3000 else {
+            status.text = "This is too long for the AI relay. Use up to 3,000 characters."
+            return
+        }
+        relayTask?.cancel()
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = try? JSONSerialization.data(withJSONObject: ["mode": mode, "text": text, "target_language": targetLanguage])
-        request.timeoutInterval = 25
-        if let token = loadRelayToken() { request.setValue("Bearer " + token, forHTTPHeaderField: "Authorization") }
-        status.text = mode == "translate" ? "Translating text..." : "Waiting for AI response..."
-        URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
+        request.setValue("Bearer " + token, forHTTPHeaderField: "Authorization")
+        request.httpBody = try? JSONSerialization.data(withJSONObject: [
+            "mode": mode, "text": trimmed, "target_language": targetLanguage
+        ])
+        request.timeoutInterval = 35
+        status.text = mode == "translate" ? "Translating…" : "Asking AI…"
+        send.isEnabled = false
+        relayTask = URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
             let code = (response as? HTTPURLResponse)?.statusCode ?? 0
             let json = data.flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }
             DispatchQueue.main.async {
                 guard let self = self else { return }
-                if (200..<300).contains(code), let answer = json?["text"] as? String {
-                    self.draw(mode == "translate" ? "OPENLENS / TRANSLATE" : "OPENLENS / AI", answer)
+                self.send.isEnabled = true
+                if (200..<300).contains(code), let raw = json?["text"] as? String,
+                   !raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    // Use the existing paged bitmap renderer to keep all answer text.
+                    self.draw(mode == "translate" ? "OPENLENS / TRANSLATE" : "OPENLENS / AI", raw)
+                    self.relayExplanation.text = "AI answered successfully. Use Next to read long answers."
                 } else {
-                    self.status.text = error?.localizedDescription ?? "AI relay error (HTTP \(code))."
+                    let detail = (json?["error"] as? String) ?? error?.localizedDescription
+                    if code == 401 {
+                        self.status.text = "Invalid relay token. Open Set up AI to correct it."
+                    } else if code == 429 {
+                        self.status.text = "AI rate limit or quota reached. Wait and retry."
+                    } else {
+                        self.status.text = detail ?? "AI request failed (HTTP \(code)). Test the connection first."
+                    }
                 }
             }
-        }.resume()
+        }
+        relayTask?.resume()
     }
 
     private func route(to destination: String) {
@@ -565,6 +664,7 @@ final class OpenLensHUDViewController: UIViewController, CLLocationManagerDelega
         menu.addAction(UIAlertAction(title: "Translate current transcript", style: .default) { _ in self.translateCurrentText() })
         menu.addAction(UIAlertAction(title: "Translation target language", style: .default) { _ in self.chooseTranslationLanguage() })
         menu.addAction(UIAlertAction(title: "Set HTTPS AI relay", style: .default) { _ in self.configureRelay() })
+        menu.addAction(UIAlertAction(title: "Test AI connection", style: .default) { _ in self.testRelayConnection() })
         menu.addAction(UIAlertAction(title: "Cancel", style: .cancel))
         menu.popoverPresentationController?.barButtonItem = navigationItem.rightBarButtonItem
         present(menu, animated: true)
@@ -635,13 +735,22 @@ final class OpenLensHUDViewController: UIViewController, CLLocationManagerDelega
         }
         alert.addAction(UIAlertAction(title: "Save", style: .default) { _ in
             let input = alert.textFields?.first?.text ?? ""
-            if !input.isEmpty && URL(string: input)?.scheme != "https" {
+            let cleaned = input.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !cleaned.isEmpty &&
+                (URL(string: cleaned)?.scheme?.lowercased() != "https" ||
+                 URL(string: cleaned)?.host == nil) {
                 self.status.text = "Use an HTTPS URL."
                 return
             }
-            UserDefaults.standard.set(input, forKey: "openlens.relay")
+            UserDefaults.standard.set(cleaned, forKey: "openlens.relay")
             self.saveRelayToken(alert.textFields?.last?.text ?? "")
-            self.status.text = input.isEmpty ? "AI relay cleared." : "AI relay saved."
+            self.status.text = cleaned.isEmpty
+                ? "AI relay cleared."
+                : "AI relay saved. Now tap Test AI connection."
+            self.relayExplanation.text = cleaned.isEmpty
+                ? "Set up a private relay to enable AI and translation."
+                : "Relay saved. Tap Test AI connection."
+
         })
         alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
         present(alert, animated: true)
