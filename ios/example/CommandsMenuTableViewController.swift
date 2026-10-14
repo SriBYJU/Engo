@@ -67,15 +67,8 @@ class CommandsMenuTableViewController: CommandsTableViewController {
         }
     }
     
-    override func viewDidDisappear(_ animated: Bool) {
-        
-        // Disconnect glasses when navigating back to list
-        if navigationController?.viewControllers.firstIndex(of: self) == nil {
-            glasses.disconnect()
-        }
-        
-        super.viewDidDisappear(animated)
-    }
+    // The connection is owned by OpenLensHomeViewController. Closing the
+    // nested Advanced Tools menu must NOT disconnect a working ENGO 3.
     
     
     // MARK: - Navigation
