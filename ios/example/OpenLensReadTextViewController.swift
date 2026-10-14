@@ -8,7 +8,7 @@ import ActiveLookSDK
 /// same tested paged-bitmap text canvas as Text and Presenter.
 final class OpenLensReadTextViewController: UIViewController,
     PHPickerViewControllerDelegate, UIImagePickerControllerDelegate,
-    UINavigationControllerDelegate {
+    UINavigationControllerDelegate, UITextViewDelegate {
 
     private let glasses: Glasses
     private let preview = UIImageView()
@@ -54,6 +54,7 @@ final class OpenLensReadTextViewController: UIViewController,
         content.addArrangedSubview(LensUI.section("Recognized text",
             detail: "Review the result below; recognition may misread unusual fonts, handwriting, or signs."))
 
+        textView.delegate = self
         textView.isEditable = true
         textView.isSelectable = true
         textView.font = .preferredFont(forTextStyle: .body)
@@ -100,6 +101,11 @@ final class OpenLensReadTextViewController: UIViewController,
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
         requestID += 1
+    }
+
+    func textViewDidChange(_ textView: UITextView) {
+        // If Vision found no text, the user can still type or paste corrections.
+        updateButtons()
     }
 
     private func updateButtons() {
