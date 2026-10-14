@@ -211,6 +211,7 @@ final class OpenLensHomeViewController: UIViewController {
             }
         ))
         content.addArrangedSubview(LensUI.button("Clear glasses display", icon: "xmark.circle") { [weak self] in
+            OpenLensCanvas.cancelPending()
             self?.glasses.clear()
         })
         content.addArrangedSubview(LensUI.button("Advanced developer tools", icon: "wrench.and.screwdriver") { [weak self] in
@@ -238,6 +239,7 @@ final class OpenLensHomeViewController: UIViewController {
     private func endSession() {
         guard !sessionEnded else { return }
         sessionEnded = true
+        OpenLensCanvas.cancelPending()
         beforeDisconnect?()
         glasses.disconnect()
     }
@@ -479,6 +481,7 @@ final class OpenLensImageViewController: UIViewController, PHPickerViewControlle
         content.addArrangedSubview(LensUI.card(cropRow))
         content.addArrangedSubview(LensUI.button("Show on glasses", icon: "eyeglasses") { [weak self] in self?.sendImage() })
         content.addArrangedSubview(LensUI.button("Clear display", icon: "xmark.circle") { [weak self] in
+            OpenLensCanvas.cancelPending()
             self?.glasses.clear()
             self?.status.text = "Clear command sent."
         })
@@ -627,6 +630,7 @@ final class OpenLensImageViewController: UIViewController, PHPickerViewControlle
                     return
                 }
                 self.preview.image = Self.hudPreview(processed, preset: size)
+                OpenLensCanvas.cancelPending()
                 self.glasses.clear()
                 // Avoid ActiveLookSDK v4.5.5's generic 1-bit imgStream wrapper:
                 // it mistakenly forwards x for both x and y.
