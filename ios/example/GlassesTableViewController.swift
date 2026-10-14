@@ -119,7 +119,9 @@ class GlassesTableViewController: UITableViewController {
                 self.navigationController?.pushViewController(OpenLensHomeViewController(glasses), animated: true)
             }, onGlassesDisconnected: { [weak self] in
                 guard let self = self else { return }
-                
+                self.connecting = false
+                self.connectionTimer?.invalidate()
+
                 let alert = UIAlertController(title: "Glasses disconnected", message: "Connection to glasses lost", preferredStyle: .alert)
                 alert.addAction(UIAlertAction(title: "OK", style: .default, handler: { (_) in
                     self.navigationController?.popToRootViewController(animated: true)
@@ -178,7 +180,13 @@ class GlassesTableViewController: UITableViewController {
                 self?.addDiscoveredGlasses(discoveredGlasses)
 
             }, onScanError: { [weak self] (error: Error) in
-                self?.stopScanning()
+                DispatchQueue.main.async {
+                    guard let self = self else { return }
+                    self.stopScanning()
+                    let warning = UIAlertController(title: "Scan failed", message: error.localizedDescription, preferredStyle: .alert)
+                    warning.addAction(UIAlertAction(title: "OK", style: .default))
+                    self.present(warning, animated: true)
+                }
             }
         )
 
