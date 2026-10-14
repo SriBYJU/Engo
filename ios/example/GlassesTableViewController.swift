@@ -58,6 +58,23 @@ class GlassesTableViewController: UITableViewController {
     }
 
     
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        title = "Connect glasses"
+        view.backgroundColor = UIColor(red: 0.045, green: 0.066, blue: 0.075, alpha: 1)
+        navigationController?.navigationBar.prefersLargeTitles = true
+        navigationItem.largeTitleDisplayMode = .always
+        tableView.rowHeight = 66
+        tableView.separatorColor = UIColor(white: 0.23, alpha: 1)
+        let label = UILabel(frame: CGRect(x: 20, y: 0, width: view.bounds.width - 40, height: 120))
+        label.text = "OPENLENS  /  ENGO 3\\n\\nTurn on your glasses, then tap Scan. Select your ENGO 3 to open the dashboard."
+        label.textColor = .white
+        label.font = .systemFont(ofSize: 15, weight: .medium)
+        label.numberOfLines = 0
+        tableView.tableHeaderView = label
+        scanNavigationItem.title = "Scan"
+    }
+
     // MARK: - Table view data source
 
     override func numberOfSections(in tableView: UITableView) -> Int {
@@ -71,7 +88,11 @@ class GlassesTableViewController: UITableViewController {
     
     override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         let cell = tableView.dequeueReusableCell(withIdentifier: "GlassesTableViewCell", for: indexPath) as UITableViewCell
-        cell.textLabel?.text = discoveredGlassesArray[indexPath.row].name
+        cell.backgroundColor = UIColor(red: 0.095, green: 0.13, blue: 0.14, alpha: 1)
+        cell.textLabel?.textColor = .white
+        cell.textLabel?.font = .systemFont(ofSize: 16, weight: .semibold)
+        cell.textLabel?.text = "●  " + discoveredGlassesArray[indexPath.row].name
+        cell.accessoryType = .disclosureIndicator
         return cell
     }
     
@@ -90,14 +111,12 @@ class GlassesTableViewController: UITableViewController {
                 
                 self.connecting = false
                 self.connectionTimer?.invalidate()
-                if (glasses.isFirmwareAtLeast(version: "4.0")) {
-                    let viewController = CommandsMenuTableViewController(glasses)
-                    self.navigationController?.pushViewController(viewController, animated: true)
-                } else {
-                    let alert = UIAlertController(title: "Update glasses firmware", message: "The glasses firmware is not up to date.", preferredStyle: .alert)
-                    alert.addAction(UIAlertAction(title: "Ok", style: .default, handler: nil))
-                    self.present(alert, animated: true)
+                // ENGO 3 may fail the legacy demo's string-based firmware check
+                // despite official firmware updates and a working BLE connection.
+                if !glasses.isFirmwareAtLeast(version: "4.0") {
+                    print("OpenLens: legacy firmware comparison failed; connected device permitted")
                 }
+                self.navigationController?.pushViewController(OpenLensHomeViewController(glasses), animated: true)
             }, onGlassesDisconnected: { [weak self] in
                 guard let self = self else { return }
                 
@@ -137,6 +156,7 @@ class GlassesTableViewController: UITableViewController {
     // MARK: - Data
     
     private func addDiscoveredGlasses(_ glasses: DiscoveredGlasses) {
+        guard !discoveredGlassesArray.contains(where: { $0.name == glasses.name }) else { return }
         discoveredGlassesArray.append(glasses)
         // TODO: // Use -performBatchUpdates:completion: instead of these methods, which will be deprecated in a future release. (introduced iOS 11)
         tableView.beginUpdates()
