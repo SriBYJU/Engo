@@ -9,7 +9,7 @@ final class OpenLensTextTests: XCTestCase {
         let long = Array(repeating: "The quick brown fox jumped over 42 lazy dogs.", count: 16).joined(separator: " ")
         let pages = OpenLensText.pages(long)
         XCTAssertGreaterThan(pages.count, 1)
-        XCTAssertTrue(pages.allSatisfy { $0.count <= 4 && $0.allSatisfy { $0.count <= 23 } })
+        XCTAssertTrue(pages.allSatisfy { $0.count <= 4 && $0.allSatisfy { $0.count <= OpenLensText.lineWidth } })
         let reconstructed = pages.flatMap { $0 }.joined(separator: " ")
         XCTAssertTrue(reconstructed.contains("42 lazy dogs."))
         XCTAssertTrue(reconstructed.hasSuffix("dogs."))
@@ -17,7 +17,7 @@ final class OpenLensTextTests: XCTestCase {
     func testLongUnbrokenWordIsNotDropped() {
         let word = String(repeating: "A", count: 71)
         let lines = OpenLensText.lines(word)
-        XCTAssertEqual(lines.map(\.count), [23,23,23,2])
+        XCTAssertEqual(lines.map(\.count), [14,14,14,14,14,1])
         XCTAssertEqual(lines.joined(), word)
     }
     func testUnsupportedCharactersAreSafe() {
@@ -47,6 +47,26 @@ final class OpenLensTextTests: XCTestCase {
         XCTAssertEqual(OpenLensText.dither([0, 255, 0, 255], width: 2), [0, 255, 0, 255])
         XCTAssertEqual(OpenLensText.dither(input, width: 0), [])
     }
+    func testPhotoSizesAreCenteredAndWithinScreen() {
+        for size in OpenLensDisplayGeometry.photoSizes {
+            XCTAssertEqual(size.width % 8, 0)
+            XCTAssertEqual(size.height % 8, 0)
+            XCTAssertGreaterThan(size.width, 0)
+            XCTAssertGreaterThan(size.height, 0)
+            XCTAssertGreaterThanOrEqual(size.originX, 0)
+            XCTAssertGreaterThanOrEqual(size.originY, 0)
+            XCTAssertLessThanOrEqual(size.originX + size.width, OpenLensDisplayGeometry.screenWidth)
+            XCTAssertLessThanOrEqual(size.originY + size.height, OpenLensDisplayGeometry.screenHeight)
+        }
+        XCTAssertEqual(OpenLensDisplayGeometry.photoSizes[2].originX, 32)
+        XCTAssertEqual(OpenLensDisplayGeometry.photoSizes[2].originY, 32)
+    }
+    func testConservativeTextLayout() {
+        XCTAssertEqual(OpenLensText.lineWidth, 14)
+        XCTAssertLessThan(OpenLensDisplayGeometry.defaultTextX + OpenLensText.lineWidth * 14, 304)
+        XCTAssertLessThan(OpenLensDisplayGeometry.bodyStartY + OpenLensDisplayGeometry.bodyLineSpacing * 3 + 24, 256)
+    }
+
     func testCardsJSONRoundTrip() throws {
         let card = OpenLensCard(title: "Meeting", body: "Remember the intro")
         let payload = try JSONEncoder().encode([card])
