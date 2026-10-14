@@ -460,7 +460,7 @@ final class OpenLensHUDViewController: UIViewController, CLLocationManagerDelega
 
     @objc private func settings() {
         let menu = UIAlertController(title: "OpenLens Settings", message: "Choose iPhone speech language or set AI relay.", preferredStyle: .actionSheet)
-        for (name, code) in [("English", "en-US"), ("Spanish", "es-ES"), ("French", "fr-FR")] {
+        for (name, code) in [("English", "en-US"), ("Spanish", "es-ES"), ("French", "fr-FR"), ("Hindi", "hi-IN"), ("Telugu", "te-IN")] {
             menu.addAction(UIAlertAction(title: "Speech: " + name, style: .default) { _ in
                 self.stopSpeech(submit: false)
                 self.recognizer = SFSpeechRecognizer(locale: Locale(identifier: code))
