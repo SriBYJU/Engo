@@ -150,16 +150,17 @@ final class OpenLensMapRenderer {
                         bitsPerComponent: 8, bytesPerRow: width * 4,
                         space: colorSpace, bitmapInfo: flags) else { return nil }
             context.draw(cg, in: CGRect(x: 0, y: 0, width: width, height: height))
+            let buffer = raw.bindMemory(to: UInt8.self)
             for i in stride(from: 0, to: length, by: 4) {
-                let lum = Double(pixels[i]) * 0.2126 +
-                          Double(pixels[i + 1]) * 0.7152 +
-                          Double(pixels[i + 2]) * 0.0722
-                // Very bright route/roads survive; background is dark.
+                let lum = Double(buffer[i]) * 0.2126 +
+                          Double(buffer[i + 1]) * 0.7152 +
+                          Double(buffer[i + 2]) * 0.0722
+                // Bright route/roads survive; background is dark.
                 let bit: UInt8 = lum >= 125 ? 255 : 0
-                pixels[i] = bit
-                pixels[i + 1] = bit
-                pixels[i + 2] = bit
-                pixels[i + 3] = 255
+                buffer[i] = bit
+                buffer[i + 1] = bit
+                buffer[i + 2] = bit
+                buffer[i + 3] = 255
             }
             return context.makeImage()
         }
