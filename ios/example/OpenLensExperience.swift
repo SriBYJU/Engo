@@ -4,7 +4,7 @@ import UIKit
 import PhotosUI
 import ActiveLookSDK
 
-private enum LensUI {
+enum LensUI {
     static let bg = UIColor(red: 0.045, green: 0.066, blue: 0.075, alpha: 1)
     static let card = UIColor(red: 0.095, green: 0.13, blue: 0.14, alpha: 1)
     static let accent = UIColor(red: 0.54, green: 0.97, blue: 0.71, alpha: 1)
@@ -128,10 +128,26 @@ final class OpenLensHomeViewController: UIViewController {
         })
         content.addArrangedSubview(LensUI.button("Live captions", icon: "waveform") { [weak self] in self?.hud(1) })
         content.addArrangedSubview(LensUI.button("Ask AI", icon: "sparkles") { [weak self] in self?.hud(2) })
-        content.addArrangedSubview(LensUI.button("Walking directions", icon: "location.north.line.fill") { [weak self] in self?.hud(3) })
+        content.addArrangedSubview(LensUI.button("Walking directions", icon: "location.north.line.fill") { [weak self] in guard let self = self else { return }; self.open(OpenLensRoutePreviewViewController(self.glasses)) })
+        content.addArrangedSubview(LensUI.section("Everyday HUD tools", detail: "Simple tools that work without a cloud account."))
+        content.addArrangedSubview(LensUI.button("Quick cards & saved notes", icon: "rectangle.stack.fill") { [weak self] in
+            guard let self = self else { return }; self.open(OpenLensCardsViewController(self.glasses))
+        })
+        content.addArrangedSubview(LensUI.button("Presenter & teleprompter", icon: "rectangle.on.rectangle") { [weak self] in
+            guard let self = self else { return }; self.open(OpenLensPresenterViewController(self.glasses))
+        })
+        content.addArrangedSubview(LensUI.button("Focus timer & clock", icon: "timer") { [weak self] in
+            guard let self = self else { return }; self.open(OpenLensFocusViewController(self.glasses))
+        })
         content.addArrangedSubview(LensUI.section("Control your glasses"))
         content.addArrangedSubview(LensUI.button("Display & device settings", icon: "slider.horizontal.3") { [weak self] in
             guard let self = self else { return }; self.open(OpenLensDeviceSettingsViewController(self.glasses))
+        })
+        content.addArrangedSubview(LensUI.button("Device diagnostics & alignment", icon: "stethoscope") { [weak self] in
+            guard let self = self else { return }; self.open(OpenLensDiagnosticsViewController(self.glasses))
+        })
+        content.addArrangedSubview(LensUI.button("Clear ENGO 3 display", icon: "xmark.circle") { [weak self] in
+            self?.glasses.clear()
         })
         content.addArrangedSubview(LensUI.button("Advanced developer tools", icon: "wrench.and.screwdriver") { [weak self] in
             guard let self = self else { return }; self.open(CommandsMenuTableViewController(self.glasses))
