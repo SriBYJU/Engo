@@ -399,6 +399,9 @@ final class OpenLensImageViewController: UIViewController, PHPickerViewControlle
     private let preview = UIImageView()
     private let status = LensUI.label("Choose a photo to begin.", size: 14, color: LensUI.muted)
     private let quality = UISegmentedControl(items: ["High contrast", "Dither", "More detail"])
+    private let imageSize = UISegmentedControl(items: OpenLensDisplayGeometry.photoSizes.map(\.name))
+    private let sizeDescription = LensUI.label("", size: 13, color: LensUI.muted)
+    private var previewGeneration = 0
     private let rotate = UISwitch()
     private let invertColors = UISwitch()
     private let fillFrame = UISwitch()
@@ -415,31 +418,44 @@ final class OpenLensImageViewController: UIViewController, PHPickerViewControlle
         super.viewDidLoad()
         title = "Display a photo"
         let content = LensUI.stack(in: view)
-        content.addArrangedSubview(LensUI.section("A photo in your view", detail: "ENGO 3 is a compact monochrome HUD. Simple icons and high-contrast images work best."))
+        content.addArrangedSubview(LensUI.section("A photo in your view", detail: "Pick how much of the 304×256 HUD your image uses. The preview includes its actual size and position."))
         preview.contentMode = .scaleAspectFit
         preview.backgroundColor = .black
         preview.layer.cornerRadius = 16
         preview.clipsToBounds = true
-        preview.heightAnchor.constraint(equalToConstant: 200).isActive = true
+        preview.heightAnchor.constraint(equalToConstant: 230).isActive = true
         content.addArrangedSubview(preview)
         content.addArrangedSubview(LensUI.button("Choose photo", icon: "photo") { [weak self] in self?.choose() })
+        content.addArrangedSubview(LensUI.button("Use built-in test pattern", icon: "checkerboard.rectangle") { [weak self] in self?.useTestPattern() })
+        content.addArrangedSubview(LensUI.section("Image size", detail: "Large is recommended. Full uses the display edges and may be clipped by the optics."))
+        let savedSizeIndex = UserDefaults.standard.object(forKey: "openlens.image.preset") as? Int ?? 2
+        imageSize.selectedSegmentIndex = max(0, min(OpenLensDisplayGeometry.photoSizes.count - 1, savedSizeIndex))
+        imageSize.selectedSegmentTintColor = LensUI.accent
+        imageSize.addTarget(self, action: #selector(imageOptionsChanged), for: .valueChanged)
+        content.addArrangedSubview(imageSize)
+        content.addArrangedSubview(sizeDescription)
+        content.addArrangedSubview(LensUI.section("Image quality", detail: "High contrast is fastest. Dither adds tonal detail. More detail can transfer slower."))
         quality.selectedSegmentIndex = 0
         quality.selectedSegmentTintColor = LensUI.accent
+        quality.addTarget(self, action: #selector(imageOptionsChanged), for: .valueChanged)
         content.addArrangedSubview(quality)
         let row = UIStackView(arrangedSubviews: [LensUI.label("Rotate image 180°", size: 15), rotate])
         row.distribution = .equalSpacing
         row.alignment = .center
         rotate.onTintColor = LensUI.accent
+        rotate.addTarget(self, action: #selector(imageOptionsChanged), for: .valueChanged)
         content.addArrangedSubview(LensUI.card(row))
         let invertRow = UIStackView(arrangedSubviews: [LensUI.label("Invert black / white", size: 15), invertColors])
         invertRow.distribution = .equalSpacing
         invertRow.alignment = .center
         invertColors.onTintColor = LensUI.accent
+        invertColors.addTarget(self, action: #selector(imageOptionsChanged), for: .valueChanged)
         content.addArrangedSubview(LensUI.card(invertRow))
         let cropRow = UIStackView(arrangedSubviews: [LensUI.label("Fill frame (crop edges)", size: 15), fillFrame])
         cropRow.distribution = .equalSpacing
         cropRow.alignment = .center
         fillFrame.onTintColor = LensUI.accent
+        fillFrame.addTarget(self, action: #selector(imageOptionsChanged), for: .valueChanged)
         content.addArrangedSubview(LensUI.card(cropRow))
         content.addArrangedSubview(LensUI.button("Show on glasses", icon: "eyeglasses") { [weak self] in self?.sendImage() })
         content.addArrangedSubview(LensUI.button("Clear display", icon: "xmark.circle") { [weak self] in
@@ -447,7 +463,82 @@ final class OpenLensImageViewController: UIViewController, PHPickerViewControlle
             self?.status.text = "Clear command sent."
         })
         content.addArrangedSubview(status)
+        refreshSizeDescription()
         content.addArrangedSubview(LensUI.label("Image data is queued over BLE. This preview cannot yet verify every packet arrived. Try a simple black-and-white logo first.", size: 12, color: LensUI.muted))
+    }
+
+    private var chosenSize: OpenLensDisplayGeometry.PhotoSize {
+        let index = max(0, min(OpenLensDisplayGeometry.photoSizes.count - 1, imageSize.selectedSegmentIndex))
+        return OpenLensDisplayGeometry.photoSizes[index]
+    }
+
+    @objc private func imageOptionsChanged() {
+        UserDefaults.standard.set(imageSize.selectedSegmentIndex, forKey: "openlens.image.preset")
+        refreshSizeDescription()
+        previewSelectedImage()
+    }
+
+    private func refreshSizeDescription() {
+        let selected = chosenSize
+        let warning = selected.fullDisplay ? " — edge clipping possible" : ""
+        sizeDescription.text = "\(selected.name) • \(selected.width)×\(selected.height) pixels • centered\(warning)"
+    }
+
+    private static func hudPreview(_ processed: UIImage, preset: OpenLensDisplayGeometry.PhotoSize) -> UIImage {
+        let format = UIGraphicsImageRendererFormat.default()
+        format.scale = 1
+        format.opaque = true
+        return UIGraphicsImageRenderer(size: CGSize(width: OpenLensDisplayGeometry.screenWidth,
+                                                      height: OpenLensDisplayGeometry.screenHeight), format: format).image { _ in
+            UIColor.black.setFill()
+            UIRectFill(CGRect(x: 0, y: 0, width: OpenLensDisplayGeometry.screenWidth,
+                              height: OpenLensDisplayGeometry.screenHeight))
+            processed.draw(at: CGPoint(x: preset.originX, y: preset.originY))
+        }
+    }
+
+    private func previewSelectedImage() {
+        guard let image = selected else { return }
+        previewGeneration += 1
+        let token = previewGeneration
+        let preset = chosenSize
+        let mode = quality.selectedSegmentIndex
+        let flip = rotate.isOn
+        let invert = invertColors.isOn
+        let crop = fillFrame.isOn
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let processed = Self.prepare(image, mode: mode, rotate: flip, invert: invert,
+                                               crop: crop, size: preset) else { return }
+            let simulatedScreen = Self.hudPreview(processed, preset: preset)
+            DispatchQueue.main.async {
+                guard let self = self, self.previewGeneration == token else { return }
+                self.preview.image = simulatedScreen
+                self.status.text = "Screen preview updated: \(preset.width)×\(preset.height). Tap Show on glasses to transmit."
+            }
+        }
+    }
+
+    private func useTestPattern() {
+        let format = UIGraphicsImageRendererFormat.default()
+        format.opaque = true
+        format.scale = 1
+        selected = UIGraphicsImageRenderer(size: CGSize(width: 320, height: 200), format: format).image { _ in
+            UIColor.black.setFill()
+            UIRectFill(CGRect(x: 0, y: 0, width: 320, height: 200))
+            UIColor.white.setStroke()
+            let path = UIBezierPath(rect: CGRect(x: 16, y: 16, width: 288, height: 168))
+            path.lineWidth = 6
+            path.stroke()
+            let circle = UIBezierPath(ovalIn: CGRect(x: 124, y: 64, width: 72, height: 72))
+            circle.lineWidth = 6
+            circle.stroke()
+            let text = "OPENLENS" as NSString
+            text.draw(at: CGPoint(x: 70, y: 138), withAttributes: [
+                .font: UIFont.boldSystemFont(ofSize: 24),
+                .foregroundColor: UIColor.white
+            ])
+        }
+        previewSelectedImage()
     }
 
     private func choose() {
@@ -473,8 +564,8 @@ final class OpenLensImageViewController: UIViewController, PHPickerViewControlle
                     return
                 }
                 self.selected = image
-                self.preview.image = image
-                self.status.text = "Photo ready. Tap Show on glasses."
+                self.status.text = "Photo selected. Preparing the glasses preview…"
+                self.previewSelectedImage()
             }
         }
     }
