@@ -822,13 +822,8 @@ final class OpenLensRoutePreviewViewController: UIViewController, CLLocationMana
         // Prefer the selected font, but automatically reduce it if the whole
         // turn (including the road name at the end) will fit on one screen.
         // Don't change the user's global text-size preference.
-        let preferred = OpenLensTextSize.selected
-        let candidates = OpenLensTextSize.allCases
-            .filter { $0.rawValue <= preferred.rawValue }
-            .sorted { $0.rawValue > $1.rawValue }
-        routeFontSize = candidates.first {
-            OpenLensText.pages(step.instructions, size: $0).count == 1
-        } ?? .small
+        routeFontSize = OpenLensText.bestFittingSize(
+            step.instructions, preferred: .selected)
         textPages = OpenLensText.pages(step.instructions, size: routeFontSize)
         textPageIndex = 0
         if step.polyline.pointCount > 0 {
