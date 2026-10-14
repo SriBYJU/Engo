@@ -3,32 +3,100 @@ import MapKit
 import CoreLocation
 import ActiveLookSDK
 
-/// Common ENGO 3 text canvas. Never silently chop off a line mid-word.
+/// Bitmapped text shares the exact 1-bit image transport used by Photos.
+/// The SDK internally rotates image pixels 180° to compensate for the optics.
+/// It must NOT also use native txt() rotation/anchor coordinates.
+enum OpenLensBitmapSettings {
+    private static let flipKey = "openlens.bitmap.rotate180"
+    private static let xKey = "openlens.bitmap.offsetX"
+    private static let yKey = "openlens.bitmap.offsetY"
+    static var rotated: Bool {
+        get { UserDefaults.standard.bool(forKey: flipKey) }
+        set { UserDefaults.standard.set(newValue, forKey: flipKey) }
+    }
+    static var offsetX: Int {
+        get { UserDefaults.standard.integer(forKey: xKey) }
+        set { UserDefaults.standard.set(max(-24, min(24, newValue)), forKey: xKey) }
+    }
+    static var offsetY: Int {
+        get { UserDefaults.standard.integer(forKey: yKey) }
+        set { UserDefaults.standard.set(max(-24, min(24, newValue)), forKey: yKey) }
+    }
+}
+
 enum OpenLensCanvas {
-    /// The 304x256 microdisplay supports three different hardware font sizes.
-    /// Text uses the current size's wrapping and baseline spacing; no line is
-    /// cut to a hard-coded global width.
-    static func show(_ glasses: Glasses, title: String, lines: [String], size: OpenLensTextSize = .selected) {
-        glasses.clear()
-        let header = OpenLensText.sanitize(title).uppercased()
-        // Keep the section label small and short so the readable body has room.
-        let heading = OpenLensOrientation.origin(x: 42, y: 42)
-        glasses.txt(x: heading.x, y: heading.y, rotation: OpenLensOrientation.rotation,
-                    font: 0, color: 15, string: String(header.prefix(14)))
-        for (index, line) in lines.prefix(size.linesPerPage).enumerated() {
-            let at = OpenLensOrientation.origin(
-                x: 42,
-                y: size.firstLineY + index * size.lineSpacing
+    /// Only user's message is displayed. No OPENLENS header or divider can
+    /// consume space, overlap another line, or appear as stray fragments.
+    /// Accurate 304×240 rendering, full 1-bit framebuffer, centered at (0,8).
+    static func render(lines: [String], size: OpenLensTextSize = .selected) -> UIImage {
+        let width = OpenLensDisplayGeometry.textImageWidth
+        let height = OpenLensDisplayGeometry.textImageHeight
+        let inset = CGFloat(OpenLensDisplayGeometry.textInset)
+        let available = CGFloat(width) - 2 * inset
+        let printable = Array(lines.prefix(size.linesPerPage)).map {
+            String(OpenLensText.sanitize($0).prefix(size.charactersPerLine))
+        }
+        let format = UIGraphicsImageRendererFormat.default()
+        format.opaque = true
+        format.scale = 1
+        let fontSize = CGFloat(size.fontHeight)
+        var font = UIFont.monospacedSystemFont(ofSize: fontSize, weight: .semibold)
+        let referenceWidth = printable.map {
+            ($0 as NSString).size(withAttributes: [.font: font]).width
+        }.max() ?? 0
+        // Pixel-measured guard: never truncate glyphs at the right edge.
+        if referenceWidth > available && referenceWidth > 0 {
+            font = UIFont.monospacedSystemFont(
+                ofSize: fontSize * available / referenceWidth * 0.97,
+                weight: .semibold
             )
-            glasses.txt(x: at.x, y: at.y, rotation: OpenLensOrientation.rotation,
-                        font: size.fontID, color: 15,
-                        string: String(OpenLensText.sanitize(line).prefix(size.charactersPerLine)))
+        }
+        let attrs: [NSAttributedString.Key: Any] = [
+            .font: font,
+            .foregroundColor: UIColor.white
+        ]
+        let renderer = UIGraphicsImageRenderer(size: CGSize(width: width, height: height),
+                                               format: format)
+        let image = renderer.image { _ in
+            UIColor.black.setFill()
+            UIRectFill(CGRect(x: 0, y: 0, width: width, height: height))
+            for (i, line) in printable.enumerated() {
+                let text = line as NSString
+                let measured = text.size(withAttributes: attrs)
+                let x = (printable.count == 1 ? (CGFloat(width) - measured.width) / 2 : inset)
+                        + CGFloat(OpenLensBitmapSettings.offsetX)
+                let y = CGFloat(size.firstLineY + i * size.lineSpacing)
+                        + CGFloat(OpenLensBitmapSettings.offsetY)
+                text.draw(at: CGPoint(x: x, y: y), withAttributes: attrs)
+            }
+        }
+        guard OpenLensBitmapSettings.rotated else { return image }
+        return renderer.image { ctx in
+            ctx.cgContext.translateBy(x: CGFloat(width), y: CGFloat(height))
+            ctx.cgContext.rotate(by: .pi)
+            image.draw(in: CGRect(x: 0, y: 0, width: width, height: height))
         }
     }
-    static func show(_ glasses: Glasses, title: String, message: String, size: OpenLensTextSize = .selected) {
+
+    @discardableResult
+    static func show(_ glasses: Glasses, title: String, lines: [String],
+                     size: OpenLensTextSize = .selected) -> UIImage {
+        let image = render(lines: lines, size: size)
+        glasses.clear()
+        // The same proven API as Photos, not the SDK native text renderer.
+        glasses.imgStream1bpp(image: image,
+                              x: Int16(OpenLensDisplayGeometry.textImageX),
+                              y: Int16(OpenLensDisplayGeometry.textImageY))
+        return image
+    }
+
+    @discardableResult
+    static func show(_ glasses: Glasses, title: String, message: String,
+                     size: OpenLensTextSize = .selected) -> UIImage {
         show(glasses, title: title, lines: OpenLensText.pages(message, size: size)[0], size: size)
     }
 }
+
 /// Saved locally: no cloud or server needed.
 enum OpenLensCardLibrary {
     static let key = "openlens.cards.v1"
