@@ -239,6 +239,11 @@ final class OpenLensDeviceSettingsViewController: UIViewController {
         guard !reading else { return }
         reading = true
         status.text = "Reading settings from ENGO 3…"
+        DispatchQueue.main.asyncAfter(deadline: .now() + 8) { [weak self] in
+            guard let self = self, self.reading else { return }
+            self.reading = false
+            self.status.text = "Settings read timed out. Try Refresh again; this firmware may not reply."
+        }
         glasses.settings { [weak self] settings in
             DispatchQueue.main.async {
                 guard let self = self else { return }
@@ -259,6 +264,7 @@ final class OpenLensImageViewController: UIViewController, PHPickerViewControlle
     private let quality = UISegmentedControl(items: ["High contrast", "More detail"])
     private let rotate = UISwitch()
     private var selected: UIImage?
+    private var transmitting = false
 
     init(_ glasses: Glasses) {
         self.glasses = glasses
@@ -292,6 +298,13 @@ final class OpenLensImageViewController: UIViewController, PHPickerViewControlle
             self?.status.text = "Clear command sent."
         })
         content.addArrangedSubview(status)
+        glasses.subscribeToFlowControlNotifications { [weak self] state in
+            switch state {
+            case .error, .overflow, .unexpectedDataType, .missingConfiguration:
+                DispatchQueue.main.async { self?.status.text = "Glasses reported transfer issue: \(state). Try High contrast or a smaller image." }
+            default: break
+            }
+        }
         content.addArrangedSubview(LensUI.label("Image data is queued over BLE. This preview cannot yet verify every packet arrived. Try a simple black-and-white logo first.", size: 12, color: LensUI.muted))
     }
 
@@ -324,8 +337,16 @@ final class OpenLensImageViewController: UIViewController, PHPickerViewControlle
         }
     }
 
+    override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
+        glasses.unsubscribeFromFlowControlNotifications()
+    }
+
     private func sendImage() {
+        guard !transmitting else { status.text = "Wait for the previous image transfer."; return }
         guard let image = selected else { status.text = "Choose a photo first."; return }
+        transmitting = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 5) { [weak self] in self?.transmitting = false }
         status.text = "Converting to monochrome…"
         let detailed = quality.selectedSegmentIndex == 1
         let flip = rotate.isOn
