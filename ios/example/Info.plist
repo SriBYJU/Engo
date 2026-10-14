@@ -2,11 +2,14 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<key>NSAppTransportSecurity</key>
-	<dict>
-		<key>NSAllowsArbitraryLoads</key>
-		<true/>
-	</dict>
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>Connect to your ENGO 3 smart glasses.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Use the iPhone microphone only when you start captions or speech input.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Transcribe speech when you choose live captions.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Find walking routes from your current position when requested.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
@@ -29,7 +32,6 @@
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>bluetooth-central</string>
-		<string>processing</string>
 	</array>
 </dict>
 </plist>
