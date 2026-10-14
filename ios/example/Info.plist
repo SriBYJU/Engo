@@ -4,6 +4,8 @@
 <dict>
 	<key>NSBluetoothAlwaysUsageDescription</key>
 	<string>Connect to your ENGO 3 smart glasses.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Take photos to recognize printed text locally on your iPhone and display it through ENGO 3.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Use the iPhone microphone only when you start captions or speech input.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
