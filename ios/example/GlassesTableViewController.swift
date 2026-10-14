@@ -50,13 +50,23 @@ class GlassesTableViewController: UITableViewController {
 
     private var discoveredGlassesArray: [DiscoveredGlasses] = []
     private var connecting: Bool = false
+    private weak var scanStatus: UILabel?
+    private var scannedThisSession = false
     
     
     // MARK: - Life cycle
     
     override func viewDidDisappear(_ animated: Bool) {
-        activeLook.stopScanning()
+        stopScanning()
         super.viewDidDisappear(animated)
+    }
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        if !scannedThisSession && !connecting {
+            scannedThisSession = true
+            startScanning()
+        }
     }
 
     
@@ -74,6 +84,7 @@ class GlassesTableViewController: UITableViewController {
         label.font = .systemFont(ofSize: 15, weight: .medium)
         label.numberOfLines = 0
         tableView.tableHeaderView = label
+        scanStatus = label
         scanNavigationItem.title = "Scan"
     }
 
@@ -175,7 +186,9 @@ class GlassesTableViewController: UITableViewController {
     // MARK: - Scan
     
     private func startScanning() {
+        scannedThisSession = true
         scanNavigationItem.title = "Stop"
+        scanStatus?.text = "SEARCHING FOR ENGO 3…\n\nKeep glasses powered on and Bluetooth enabled."
 
         self.discoveredGlassesArray = []
         self.tableView.reloadData()
@@ -202,6 +215,7 @@ class GlassesTableViewController: UITableViewController {
     
     private func stopScanning() {
         activeLook.stopScanning()
+        scanStatus?.text = "OPENLENS  /  ENGO 3\n\nSelect your glasses, or tap Scan to search again."
         scanNavigationItem.title = "Scan"
         scanTimer?.invalidate()
     }
