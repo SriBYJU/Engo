@@ -463,8 +463,12 @@ final class OpenLensHUDViewController: UIViewController, CLLocationManagerDelega
         for (name, code) in [("English", "en-US"), ("Spanish", "es-ES"), ("French", "fr-FR"), ("Hindi", "hi-IN"), ("Telugu", "te-IN")] {
             menu.addAction(UIAlertAction(title: "Speech: " + name, style: .default) { _ in
                 self.stopSpeech(submit: false)
-                self.recognizer = SFSpeechRecognizer(locale: Locale(identifier: code))
-                self.status.text = "Speech language " + name + " (transcription only)."
+                if let recognizer = SFSpeechRecognizer(locale: Locale(identifier: code)) {
+                    self.recognizer = recognizer
+                    self.status.text = "Speech language " + name + " selected. Availability depends on iOS and the installed language."
+                } else {
+                    self.status.text = name + " speech recognition is not available on this iPhone."
+                }
             })
         }
         menu.addAction(UIAlertAction(title: "Translate current transcript", style: .default) { _ in self.translateCurrentText() })
