@@ -91,7 +91,7 @@ final class OpenLensTextTests: XCTestCase {
             let normalized = OpenLensText.sanitize(original).filter { !$0.isWhitespace }
             let recovered = pages.flatMap { $0 }.joined().filter { !$0.isWhitespace }
             XCTAssertEqual(recovered, normalized, "Missing characters at size: \(size.name)")
-            XCTAssertTrue(pages.last?.last?.hasSuffix("MESSAGE!") ?? false, "End was dropped for \(size.name)")
+            XCTAssertTrue(recovered.hasSuffix("ENDOFMESSAGE!"), "End was dropped for \(size.name)")
         }
     }
 
