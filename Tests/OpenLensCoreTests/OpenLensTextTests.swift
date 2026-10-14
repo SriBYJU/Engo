@@ -9,7 +9,7 @@ final class OpenLensTextTests: XCTestCase {
         let long = Array(repeating: "The quick brown fox jumped over 42 lazy dogs.", count: 16).joined(separator: " ")
         let pages = OpenLensText.pages(long)
         XCTAssertGreaterThan(pages.count, 1)
-        XCTAssertTrue(pages.allSatisfy { $0.count <= 4 && $0.allSatisfy { $0.count <= OpenLensText.lineWidth } })
+        XCTAssertTrue(pages.allSatisfy { $0.count <= OpenLensText.linesPerPage && $0.allSatisfy { $0.count <= OpenLensText.lineWidth } })
         let reconstructed = pages.flatMap { $0 }.joined(separator: " ")
         XCTAssertTrue(reconstructed.contains("42 lazy dogs."))
         XCTAssertTrue(reconstructed.hasSuffix("dogs."))
@@ -17,7 +17,7 @@ final class OpenLensTextTests: XCTestCase {
     func testLongUnbrokenWordIsNotDropped() {
         let word = String(repeating: "A", count: 71)
         let lines = OpenLensText.lines(word)
-        XCTAssertEqual(lines.map(\.count), Array(repeating: 9, count: 7) + [8])
+        XCTAssertEqual(lines.map(\.count), Array(repeating: 11, count: 6) + [5])
         XCTAssertEqual(lines.joined(), word)
     }
     func testUnsupportedCharactersAreSafe() {
@@ -67,16 +67,37 @@ final class OpenLensTextTests: XCTestCase {
         XCTAssertLessThan(OpenLensDisplayGeometry.bodyStartY + OpenLensDisplayGeometry.bodyLineSpacing * 3 + 24, 256)
     }
 
-    func testAllTextSizesHaveRealSDKFontsAndSafePageGeometry() {
-        XCTAssertEqual(OpenLensTextSize.allCases.map(\.fontID), [0, 2, 3])
-        XCTAssertEqual(OpenLensTextSize.allCases.map(\.fontHeight), [24, 35, 49])
+    func testBitmapTextUsesScreenAreaAndReadableFontSizes() {
+        XCTAssertEqual(OpenLensTextSize.allCases.map(\.fontHeight), [30, 42, 56])
         XCTAssertEqual(OpenLensTextSize.allCases.map(\.name), ["Small", "Medium", "Large"])
-        XCTAssertEqual(OpenLensTextSize.medium.fontHeight, 35)
+        XCTAssertEqual(OpenLensTextSize.medium.fontHeight, 42)
+        XCTAssertEqual(OpenLensDisplayGeometry.textImageWidth, 304)
+        XCTAssertEqual(OpenLensDisplayGeometry.textImageHeight, 240)
+        XCTAssertEqual(OpenLensDisplayGeometry.textImageX, 0)
+        XCTAssertEqual(OpenLensDisplayGeometry.textImageY, 8)
+        XCTAssertLessThanOrEqual(OpenLensDisplayGeometry.textImageY + OpenLensDisplayGeometry.textImageHeight,
+                                OpenLensDisplayGeometry.screenHeight)
         for size in OpenLensTextSize.allCases {
             XCTAssertGreaterThan(size.charactersPerLine, 0)
             XCTAssertGreaterThan(size.linesPerPage, 0)
-            XCTAssertLessThanOrEqual(size.firstLineY + (size.linesPerPage - 1) * size.lineSpacing + size.fontHeight, 256)
-            XCTAssertLessThanOrEqual(42 + size.charactersPerLine * (size.fontHeight / 2), 304)
+            XCTAssertLessThanOrEqual(size.firstLineY +
+                (size.linesPerPage - 1) * size.lineSpacing + size.fontHeight,
+                OpenLensDisplayGeometry.textImageHeight)
+            // Monospaced glyphs are about 0.6*font size wide; enough safety for wide glyphs.
+            XCTAssertLessThanOrEqual(
+                size.charactersPerLine * Double(size.fontHeight) * 0.61 +
+                    2 * Double(OpenLensDisplayGeometry.textInset), 304.0)
+        }
+    }
+
+    func testActualProblemSentenceNotClippedOrReordered() {
+        let original = "Hey my name is Shree"
+        for size in OpenLensTextSize.allCases {
+            let pages = OpenLensText.pages(original, size: size)
+            let collected = pages.flatMap { $0 }.joined(separator: " ")
+            XCTAssertEqual(collected, original, "Sentence unexpectedly clipped for \(size.name)")
+            XCTAssertEqual(pages.count, 1, "Short sentence should be visible on one screen at \(size.name)")
+            XCTAssertEqual(pages.flatMap { $0 }.last, "Shree")
         }
     }
 
