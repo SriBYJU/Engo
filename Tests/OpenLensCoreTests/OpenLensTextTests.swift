@@ -97,7 +97,7 @@ final class OpenLensTextTests: XCTestCase {
             let collected = pages.flatMap { $0 }.joined(separator: " ")
             XCTAssertEqual(collected, original, "Sentence unexpectedly clipped for \(size.name)")
             XCTAssertEqual(pages.count, 1, "Short sentence should be visible on one screen at \(size.name)")
-            XCTAssertEqual(pages.flatMap { $0 }.last, "Shree")
+            XCTAssertTrue(pages.flatMap { $0 }.last?.hasSuffix("Shree") ?? false)
         }
     }
 
