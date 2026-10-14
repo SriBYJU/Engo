@@ -253,6 +253,9 @@ final class OpenLensDeviceSettingsViewController: UIViewController {
     private let brightness = UISlider()
     private let autoBrightness = UISwitch()
     private let gestures = UISwitch()
+    private let textHorizontal = UISlider()
+    private let textVertical = UISlider()
+    private let positionLabel = LensUI.label("", size: 13, color: LensUI.muted)
     private let status = LensUI.label("Reading device settings…", size: 13, color: LensUI.muted)
     private var reading = false
 
@@ -272,6 +275,25 @@ final class OpenLensDeviceSettingsViewController: UIViewController {
         orientation.addTarget(self, action: #selector(orientationChanged), for: .valueChanged)
         content.addArrangedSubview(orientation)
         content.addArrangedSubview(LensUI.button("Show orientation test", icon: "textformat") { [weak self] in self?.testOrientation() })
+        content.addArrangedSubview(LensUI.section("Text position", detail: "Move the HUD within your field of view; text starts safely inside the screen."))
+        textHorizontal.minimumValue = -32
+        textHorizontal.maximumValue = 32
+        textHorizontal.value = Float(OpenLensOrientation.horizontalOffset)
+        textHorizontal.minimumTrackTintColor = LensUI.accent
+        textHorizontal.addTarget(self, action: #selector(textPositionChanged), for: .valueChanged)
+        content.addArrangedSubview(LensUI.label("Move left / right", size: 14, color: LensUI.muted))
+        content.addArrangedSubview(textHorizontal)
+        textVertical.minimumValue = -32
+        textVertical.maximumValue = 32
+        textVertical.value = Float(OpenLensOrientation.verticalOffset)
+        textVertical.minimumTrackTintColor = LensUI.accent
+        textVertical.addTarget(self, action: #selector(textPositionChanged), for: .valueChanged)
+        content.addArrangedSubview(LensUI.label("Move up / down", size: 14, color: LensUI.muted))
+        content.addArrangedSubview(textVertical)
+        content.addArrangedSubview(positionLabel)
+        content.addArrangedSubview(LensUI.button("Reset text position", icon: "arrow.uturn.backward") { [weak self] in self?.resetTextPosition() })
+        content.addArrangedSubview(LensUI.button("Reset glasses' hardware screen shift", icon: "viewfinder") { [weak self] in self?.confirmHardwareReset() })
+        updatePositionLabel()
         content.addArrangedSubview(LensUI.section("Display brightness", detail: "Disable automatic brightness to use the manual setting."))
         brightness.minimumValue = 0
         brightness.maximumValue = 15
@@ -304,9 +326,38 @@ final class OpenLensDeviceSettingsViewController: UIViewController {
         status.text = "Orientation preference saved. Tap Show orientation test."
     }
     private func testOrientation() {
-        glasses.clear()
-        glasses.txt(x: 26, y: 112, rotation: OpenLensOrientation.rotation, font: 2, color: 15, string: "OPENLENS - THIS WAY UP")
-        status.text = "Test queued. If inverted, choose the other orientation."
+        OpenLensCanvas.show(glasses, title: "ALIGN TEST",
+                            lines: ["THIS WAY UP", "12345678901234", "LEFT  CENTER", "BOTTOM ROW"])
+        status.text = "Test queued with the 24px font and safe margins. Adjust text position until all four rows are visible."
+    }
+    private func updatePositionLabel() {
+        positionLabel.text = "Text offset: horizontal \(OpenLensOrientation.horizontalOffset) px, vertical \(OpenLensOrientation.verticalOffset) px"
+    }
+    @objc private func textPositionChanged() {
+        OpenLensOrientation.horizontalOffset = Int(textHorizontal.value.rounded())
+        OpenLensOrientation.verticalOffset = Int(textVertical.value.rounded())
+        updatePositionLabel()
+        status.text = "Position saved for future text. Tap Show orientation test to preview it."
+    }
+    private func resetTextPosition() {
+        OpenLensOrientation.horizontalOffset = 0
+        OpenLensOrientation.verticalOffset = 0
+        textHorizontal.value = 0
+        textVertical.value = 0
+        updatePositionLabel()
+        testOrientation()
+    }
+    private func confirmHardwareReset() {
+        let alert = UIAlertController(title: "Reset physical screen offset?",
+            message: "The glasses can remember a screen shift across restarts. Resetting it to 0,0 may help if only a sliver of text appears. This changes a setting stored on the glasses.", preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        alert.addAction(UIAlertAction(title: "Reset glasses offset", style: .destructive) { [weak self] _ in
+            guard let self = self else { return }
+            self.glasses.shift(x: 0, y: 0)
+            self.testOrientation()
+            self.status.text = "Device shift reset queued. Refresh to check reported X/Y shift."
+        })
+        present(alert, animated: true)
     }
     @objc private func changeLuminance() {
         let level = UInt8(brightness.value.rounded())
@@ -337,7 +388,7 @@ final class OpenLensDeviceSettingsViewController: UIViewController {
                 self.brightness.value = Float(settings.luma)
                 self.autoBrightness.isOn = settings.brightnessAdjustmentEnabled
                 self.gestures.isOn = settings.gestureDetectionEnabled
-                self.status.text = "Reported: brightness \(settings.luma)/15, auto \(settings.brightnessAdjustmentEnabled ? "on" : "off"), gestures \(settings.gestureDetectionEnabled ? "on" : "off")."
+                self.status.text = "Reported: brightness \(settings.luma)/15, auto \(settings.brightnessAdjustmentEnabled ? "on" : "off"), gestures \(settings.gestureDetectionEnabled ? "on" : "off"), device shift X \(settings.xShift), Y \(settings.yShift)."
             }
         }
     }
