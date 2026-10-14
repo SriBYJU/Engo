@@ -347,7 +347,7 @@ final class OpenLensDeviceSettingsViewController: UIViewController {
     }
     private func testOrientation() {
         let size = OpenLensTextSize.selected
-        OpenLensCanvas.show(glasses, title: "SIZE TEST", message: "OPENLENS READ ME", size: size)
+        OpenLensCanvas.show(glasses, title: "SIZE TEST", message: "HELLO", size: size)
         status.text = "Queued \(size.name) \(size.fontHeight)px alignment test. Check text size and position through your glasses."
     }
     private func updatePositionLabel() {
