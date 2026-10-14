@@ -129,8 +129,22 @@ final class OpenLensMapRenderer {
             ("N" as NSString).draw(at: CGPoint(x: width - 34, y: 12), withAttributes: [
                 .font: UIFont.boldSystemFont(ofSize: 22), .foregroundColor: UIColor.white
             ])
+            // Preserve visible map-provider attribution in the HUD conversion.
+            let attribution = "APPLE MAPS" as NSString
+            UIColor.black.setFill()
+            UIRectFill(CGRect(x: 4, y: height - 17, width: 76, height: 15))
+            attribution.draw(at: CGPoint(x: 7, y: height - 17), withAttributes: [
+                .font: UIFont.boldSystemFont(ofSize: 10), .foregroundColor: UIColor.white
+            ])
         }
-        return makeMonochrome(uiImage)
+        guard let output = makeMonochrome(uiImage) else { return nil }
+        guard OpenLensBitmapSettings.rotated else { return output }
+        // Honor the same optional extra 180° orientation as the working text.
+        return UIGraphicsImageRenderer(size: output.size, format: format).image { ctx in
+            ctx.cgContext.translateBy(x: CGFloat(width), y: CGFloat(height))
+            ctx.cgContext.rotate(by: .pi)
+            output.draw(in: CGRect(x: 0, y: 0, width: width, height: height))
+        }
     }
 
     /// 1-bit pixels are required to make a useful optical mini-map. Normalize
