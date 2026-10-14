@@ -68,6 +68,11 @@ export default {
     const mode = payload?.mode;
     const prompt = typeof payload?.text === "string" ? payload.text.trim() : "";
     const target = payload?.target_language;
+    const task = payload?.task ?? "general";
+    const allowedTasks = ["general", "explain", "summarize", "rewrite", "brainstorm"];
+    if (mode === "ai" && !allowedTasks.includes(task)) {
+      return json({ error: "Invalid AI task" }, 400);
+    }
     if (!["ai", "translate"].includes(mode) || !prompt || prompt.length > 3000) {
       return json({ error: "Send mode=ai or translate and 1-3000 characters" }, 400);
     }
@@ -83,12 +88,22 @@ export default {
     }
 
     const names = { en: "English", es: "Spanish", fr: "French", hi: "Hindi", te: "Telugu" };
+    const base = "You are OpenLens, a compact smart-glasses assistant. " +
+      "Answer clearly in plain text without tables. Prefer 120 words or fewer " +
+      "unless an accurate answer requires more. Be careful with numbers, " +
+      "names and factual claims. Never pretend to see the user's surroundings, " +
+      "read their camera, know their current location or browse live data.";
+    const taskInstructions = {
+      general: "Answer the person's question directly, with useful next steps where relevant.",
+      explain: "Explain the concept in simple, accurate language with one relatable example.",
+      summarize: "Summarize the supplied text, preserving named entities, key facts, figures and caveats. Do not invent facts.",
+      rewrite: "Rewrite the supplied text for clarity and natural tone. Keep the meaning and any important constraints.",
+      brainstorm: "Suggest 4 practical, distinct ideas, each one sentence long. Avoid unsupported claims.",
+    };
     const instructions = mode === "translate"
       ? "Translate the user's text faithfully into " + names[target] +
         ". Return only the translation; preserve street names, numbers, and proper nouns."
-      : "You are OpenLens, a compact smart-glasses assistant. Give practical and accurate " +
-        "answers in plain text. Usually stay under 120 words, and avoid markdown tables. " +
-        "Never imply you can see the user's surroundings or real-time location.";
+      : base + " " + taskInstructions[task];
     let upstream;
     try {
       upstream = await fetch("https://api.openai.com/v1/responses", {
