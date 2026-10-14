@@ -8,6 +8,17 @@ on:
   workflow_dispatch:
 
 jobs:
+  test-core:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: swift-actions/setup-swift@v2
+        with:
+          swift-version: "5.10"
+      - name: Test HUD formatting, page layout, dithering and saved cards
+        run: swift test --disable-sandbox
+
   build-ios:
     runs-on: macos-15
     timeout-minutes: 20
