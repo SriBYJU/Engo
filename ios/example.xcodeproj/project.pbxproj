@@ -453,7 +453,8 @@
 				DEVELOPMENT_TEAM = RHRSWA2M4Z;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = example/Info.plist;
-				INFOPLIST_KEY_LSApplicationCategoryType = "";
+				INFOPLIST_KEY_CFBundleDisplayName = OpenLens;
+                INFOPLIST_KEY_LSApplicationCategoryType = "";
 				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "Connect to ENGO smart glasses.";
                 INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Calculate walking route instructions for your smart glasses.";
                 INFOPLIST_KEY_NSMicrophoneUsageDescription = "Listen only when you start OpenLens captions or an AI question.";
@@ -487,7 +488,8 @@
 				DEVELOPMENT_TEAM = RHRSWA2M4Z;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = example/Info.plist;
-				INFOPLIST_KEY_LSApplicationCategoryType = "";
+				INFOPLIST_KEY_CFBundleDisplayName = OpenLens;
+                INFOPLIST_KEY_LSApplicationCategoryType = "";
 				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "Connect to ENGO smart glasses.";
                 INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Calculate walking route instructions for your smart glasses.";
                 INFOPLIST_KEY_NSMicrophoneUsageDescription = "Listen only when you start OpenLens captions or an AI question.";
