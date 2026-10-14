@@ -7,7 +7,8 @@ public enum OpenLensText {
 
     /// The legacy hardware font only supports a limited ASCII subset.
     public static func sanitize(_ input: String) -> String {
-        let ascii = input.folding(options: [.diacriticInsensitive, .widthInsensitive], locale: Locale(identifier: "en_US_POSIX"))
+        let romanized = input.applyingTransform(.toLatin, reverse: false) ?? input
+        let ascii = romanized.folding(options: [.diacriticInsensitive, .widthInsensitive], locale: Locale(identifier: "en_US_POSIX"))
         var result = ""
         for scalar in ascii.unicodeScalars {
             switch scalar.value {
