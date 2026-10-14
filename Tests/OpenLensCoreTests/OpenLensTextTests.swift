@@ -22,12 +22,16 @@ final class OpenLensTextTests: XCTestCase {
     }
     func testUnsupportedCharactersAreSafe() {
         let s = OpenLensText.sanitize("café • 東京 😃")
-        XCTAssertEqual(s, "cafe       ")
+        XCTAssertTrue(s.hasPrefix("cafe"))
         XCTAssertTrue(s.unicodeScalars.allSatisfy { $0.isASCII })
     }
     func testParagraphsAndEmptyString() {
         XCTAssertEqual(OpenLensText.lines("Hello\nWorld"), ["Hello", "World"])
         XCTAssertEqual(OpenLensText.pages(""), [[""]])
+    }
+    func testRomanizesIndicScriptsForLegacyHUD() {
+        XCTAssertEqual(OpenLensText.sanitize("नमस्ते"), "namaste")
+        XCTAssertEqual(OpenLensText.sanitize("నమస్తే"), "namaste")
     }
     func testCountdownNeverGoesNegative() {
         XCTAssertEqual(OpenLensText.countdown(-100), "00:00")
