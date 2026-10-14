@@ -115,12 +115,31 @@ enum LensUI {
 
 enum OpenLensOrientation {
     private static let preference = "openlens.display.rotated180"
-    // The original demo used bottomRL and was physically inverted on ENGO 3.
+    private static let horizontalKey = "openlens.display.textHorizontalOffset"
+    private static let verticalKey = "openlens.display.textVerticalOffset"
+
+    // The demo's .bottomRL direction draws toward the left: when selected,
+    // mirror the anchor too. Only toggling rotation clips most characters.
     static var isRotated: Bool {
         get { UserDefaults.standard.bool(forKey: preference) }
         set { UserDefaults.standard.set(newValue, forKey: preference) }
     }
+    static var horizontalOffset: Int {
+        get { UserDefaults.standard.integer(forKey: horizontalKey) }
+        set { UserDefaults.standard.set(max(-32, min(32, newValue)), forKey: horizontalKey) }
+    }
+    static var verticalOffset: Int {
+        get { UserDefaults.standard.integer(forKey: verticalKey) }
+        set { UserDefaults.standard.set(max(-32, min(32, newValue)), forKey: verticalKey) }
+    }
     static var rotation: TextRotation { isRotated ? .bottomRL : .topLR }
+    static func origin(x: Int, y: Int) -> (x: Int16, y: Int16) {
+        let shiftedX = max(0, min(303, x + horizontalOffset))
+        let shiftedY = max(0, min(255, y + verticalOffset))
+        return isRotated
+            ? (Int16(303 - shiftedX), Int16(255 - shiftedY))
+            : (Int16(shiftedX), Int16(shiftedY))
+    }
 }
 
 final class OpenLensHomeViewController: UIViewController {
