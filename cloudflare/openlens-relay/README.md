@@ -5,7 +5,7 @@ This Cloudflare Worker is a small authenticated bridge for **Ask AI** and
 **Translate**. It accepts the exact JSON body already sent by the iPhone app:
 
 ```json
-{"mode":"ai","text":"Explain photosynthesis simply","target_language":"en"}
+{"mode":"ai","task":"explain","text":"photosynthesis","target_language":"en"}
 ```
 
 Or:
@@ -14,6 +14,8 @@ Or:
 ```
 
 It returns `{"text":"..."}`, which OpenLens automatically formats into pages on the ENGO 3.
+
+Supported `task` values for AI requests are `general`, `explain`, `summarize`, `rewrite` and `brainstorm`. Unsupported task names return HTTP 400. The in-app action menu sets this field automatically. Translation uses `mode: "translate"` and supports English, Spanish, French, Hindi, and Telugu. The app also displays the complete result and lets you copy or explicitly save it as a Quick Card.
 
 ## One-time setup
 
@@ -58,7 +60,7 @@ Use the **full endpoint path** in the iPhone app:
 
 On the iPhone: **OpenLens → Ask AI → Set up AI**. Enter that HTTPS URL and
 the random **client token**. Then tap **Test AI connection**. You should see
-"AI relay connected". The OpenAI API key stays only in Cloudflare secrets.
+an indication that the relay is online and reports itself configured. Then send a real question to verify your API account and model. The OpenAI API key stays only in Cloudflare secrets.
 
 ## How to verify the relay without paying for an AI call
 
@@ -89,7 +91,7 @@ Use Cloudflare Worker logs for server errors—avoid logging user prompts or sec
 - This Worker does not enable a general-purpose public AI proxy.
 - `GET /openlens/health` requires authorization but does not invoke the AI.
 - `POST /openlens` requires an authorized request, enforces input length,
-  validates translation destinations, and returns sanitized error messages.
+  validates translation destinations and AI action types, and returns sanitized errors.
 - HTTPS is required by the iPhone application.
 - Passwords, API keys, and client tokens must NOT be committed to GitHub.
   `.dev.vars` and `.env` should remain private.
