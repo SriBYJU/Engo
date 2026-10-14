@@ -587,40 +587,54 @@ final class OpenLensImageViewController: UIViewController, PHPickerViewControlle
     }
 
     private func sendImage() {
-        guard !transmitting else { status.text = "Wait for the previous image transfer."; return }
-        guard let image = selected else { status.text = "Choose a photo first."; return }
+        guard !transmitting else { status.text = "Wait for the previous image to finish queuing."; return }
+        guard let image = selected else { status.text = "Choose a photo or test pattern first."; return }
         transmitting = true
-        DispatchQueue.main.asyncAfter(deadline: .now() + 5) { [weak self] in self?.transmitting = false }
-        status.text = "Converting to monochrome…"
+        status.text = "Preparing selected image size…"
+        let size = chosenSize
         let mode = quality.selectedSegmentIndex
         let flip = rotate.isOn
         let invert = invertColors.isOn
         let crop = fillFrame.isOn
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            let processed = Self.prepare(image, mode: mode, rotate: flip, invert: invert, crop: crop)
+            let processed = Self.prepare(image, mode: mode, rotate: flip, invert: invert,
+                                         crop: crop, size: size)
             DispatchQueue.main.async {
                 guard let self = self else { return }
-                guard let processed = processed else { self.status.text = "Image conversion failed."; return }
-                self.preview.image = processed
-                self.glasses.clear()
-                // Do not call the SDK's generic imgStream 1bpp wrapper: v4.5.5
-                // incorrectly passes x for y. Call the direct method instead.
-                if mode == 2 {
-                    self.glasses.imgStream4bppHeatShrink(image: processed, x: 56, y: 80)
-                } else {
-                    self.glasses.imgStream1bpp(image: processed, x: 56, y: 80)
+                guard let processed = processed else {
+                    self.transmitting = false
+                    self.status.text = "Image conversion failed. Try a different photo."
+                    return
                 }
-                // Streaming does not require cfgWrite/cfgSet or an immediate imgDelete.
-                let format = mode == 2 ? "4-bit compressed" : mode == 1 ? "1-bit dithered" : "1-bit high contrast"
-                self.status.text = "Queued 192×96 \(format) image. Check ENGO 3; retry with High contrast if missing."
+                self.preview.image = Self.hudPreview(processed, preset: size)
+                self.glasses.clear()
+                // Avoid ActiveLookSDK v4.5.5's generic 1-bit imgStream wrapper:
+                // it mistakenly forwards x for both x and y.
+                let x = Int16(size.originX)
+                let y = Int16(size.originY)
+                if mode == 2 {
+                    self.glasses.imgStream4bppHeatShrink(image: processed, x: x, y: y)
+                } else {
+                    self.glasses.imgStream1bpp(image: processed, x: x, y: y)
+                }
+                let formatName = mode == 2 ? "4-bit grayscale" : mode == 1 ? "1-bit dithered" : "1-bit high contrast"
+                let warning = size.fullDisplay ? " Edges may be clipped by the optics." : ""
+                self.status.text = "Queued \(size.width)×\(size.height) \(formatName) image at (\(size.originX),\(size.originY)). Check the glasses.\(warning)"
+                // The SDK queues BLE packets asynchronously, with no frame-displayed acknowledgement.
+                // Larger transfers need more time before another send can safely start.
+                let cooldown: TimeInterval = size.fullDisplay ? 10 : size.width >= 240 ? 7 : 4
+                DispatchQueue.main.asyncAfter(deadline: .now() + cooldown) { [weak self] in
+                    self?.transmitting = false
+                }
             }
         }
     }
 
     /// Preprocess for the SDK's monochrome encoder: resize, threshold or dither,
     /// invert if desired, and optionally turn the final frame 180 degrees.
-    private static func prepare(_ image: UIImage, mode: Int, rotate: Bool, invert: Bool, crop: Bool) -> UIImage? {
-        let width = 192, height = 96
+    private static func prepare(_ image: UIImage, mode: Int, rotate: Bool, invert: Bool, crop: Bool,
+                                size: OpenLensDisplayGeometry.PhotoSize) -> UIImage? {
+        let width = size.width, height = size.height
         guard image.size.width > 0, image.size.height > 0 else { return nil }
         let format = UIGraphicsImageRendererFormat.default()
         format.opaque = true
