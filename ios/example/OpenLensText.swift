@@ -2,7 +2,7 @@ import Foundation
 
 /// Pure Foundation rendering primitives shared by the iOS client and SwiftPM tests.
 public enum OpenLensText {
-    public static let lineWidth = 23
+    public static let lineWidth = 14
     public static let linesPerPage = 4
 
     /// The legacy hardware font only supports a limited ASCII subset.
@@ -99,4 +99,31 @@ public struct OpenLensCard: Codable, Equatable, Identifiable {
         self.title = title
         self.body = body
     }
+}
+
+/// Default display is 304×256 pixels. Keep HUD text inside the optical safe area.
+/// Presets for photos include an intentionally edge-to-edge mode, which can clip
+/// through some frames' optical eyebox and may transfer more slowly over BLE.
+public enum OpenLensDisplayGeometry {
+    public static let screenWidth = 304
+    public static let screenHeight = 256
+    public static let defaultTextX = 48
+    public static let headerY = 40
+    public static let bodyStartY = 88
+    public static let bodyLineSpacing = 36
+
+    public struct PhotoSize: Equatable {
+        public let name: String
+        public let width: Int
+        public let height: Int
+        public var originX: Int { (screenWidth - width) / 2 }
+        public var originY: Int { (screenHeight - height) / 2 }
+        public var fullDisplay: Bool { width == screenWidth }
+    }
+    public static let photoSizes: [PhotoSize] = [
+        PhotoSize(name: "Small", width: 160, height: 96),
+        PhotoSize(name: "Medium", width: 208, height: 144),
+        PhotoSize(name: "Large", width: 240, height: 192),
+        PhotoSize(name: "Full", width: 304, height: 240)
+    ]
 }
