@@ -157,6 +157,14 @@ enum OpenLensCanvas {
         }
     }
 
+    /// Stream any 1-bit HUD frame through the same guarded RGB conversion
+    /// and BLE pacing as text. Used for MapKit route previews.
+    @discardableResult
+    static func showImage(_ glasses: Glasses, image: UIImage) -> UIImage {
+        enqueue(glasses, image: image)
+        return image
+    }
+
     @discardableResult
     static func show(_ glasses: Glasses, title: String, lines: [String],
                      size: OpenLensTextSize = .selected) -> UIImage {
@@ -526,154 +534,400 @@ final class OpenLensFocusViewController: UIViewController {
 }
 
 /// Route instructions are manual preview steps, not live safety-critical guidance.
-final class OpenLensRoutePreviewViewController: UIViewController, CLLocationManagerDelegate {
+/// A walking-route companion with two distinct optical modes:
+/// instructions (all pages, including street names) or high-contrast mini-map.
+final class OpenLensRoutePreviewViewController: UIViewController, CLLocationManagerDelegate, MKMapViewDelegate {
     private let glasses: Glasses
     private let locationManager = CLLocationManager()
     private let destination = UITextField()
     private let status = UILabel()
     private let instruction = UILabel()
     private let position = UILabel()
-    private let previous = UIButton(type: .system)
-    private let nextButton = UIButton(type: .system)
+    private let pageLabel = UILabel()
+    private let modeSelector = UISegmentedControl(items: ["Directions text", "Street map"])
+    private let mapScope = UISegmentedControl(items: ["Next turn", "Whole route"])
+    private let previousTurn = UIButton(type: .system)
+    private let nextTurn = UIButton(type: .system)
+    private let previousPage = UIButton(type: .system)
+    private let nextPage = UIButton(type: .system)
+    private let glassesPreview = UIImageView()
+    private let mapView = MKMapView()
+    private let followSwitch = UISwitch()
+    private let mapRenderer = OpenLensMapRenderer()
     private var pendingDestination: String?
+    private var route: MKRoute?
+    private var targetItem: MKMapItem?
     private var steps: [MKRoute.Step] = []
     private var stepIndex = 0
+    private var textPages: [[String]] = []
+    private var textPageIndex = 0
+    private var lastMapRefresh = Date.distantPast
+    private var lastLocation: CLLocation?
     private var lookup: MKLocalSearch?
     private var directions: MKDirections?
+    private var active = false
 
-    init(_ glasses: Glasses) { self.glasses = glasses; super.init(nibName: nil, bundle: nil) }
+    init(_ glasses: Glasses) {
+        self.glasses = glasses
+        super.init(nibName: nil, bundle: nil)
+    }
     required init?(coder: NSCoder) { fatalError("Use init(glasses)") }
+
     override func viewDidLoad() {
         super.viewDidLoad()
-        title = "Walking route"
-        locationManager.delegate = self
+        title = "Walking directions"
         let content = LensUI.stack(in: view)
-        content.addArrangedSubview(LensUI.section("Walking route preview", detail: "Find walking directions and manually move through turns. Not live or safety-critical navigation."))
-        destination.placeholder = "Where to?"
+        locationManager.delegate = self
+        locationManager.desiredAccuracy = kCLLocationAccuracyBest
+        locationManager.distanceFilter = 15
+
+        content.addArrangedSubview(LensUI.section("Walk with OpenLens",
+            detail: "Choose full written directions or a real MapKit street map on your glasses. Maps are previews, not automatic AR navigation."))
+        destination.placeholder = "Destination name or street address"
         destination.textColor = .white
+        destination.font = .systemFont(ofSize: 16)
         destination.backgroundColor = LensUI.card
-        destination.layer.cornerRadius = 12
+        destination.layer.cornerRadius = 13
         destination.autocapitalizationType = .words
-        destination.heightAnchor.constraint(equalToConstant: 52).isActive = true
+        destination.returnKeyType = .search
         destination.leftView = UIView(frame: CGRect(x: 0, y: 0, width: 14, height: 1))
         destination.leftViewMode = .always
+        destination.heightAnchor.constraint(equalToConstant: 52).isActive = true
         content.addArrangedSubview(destination)
-        content.addArrangedSubview(LensUI.button("Find walking route", icon: "figure.walk") { [weak self] in self?.findRoute() })
+        content.addArrangedSubview(LensUI.button("Find a walking route", icon: "figure.walk") { [weak self] in self?.findRoute() })
+
+        content.addArrangedSubview(LensUI.section("Show on glasses"))
+        modeSelector.selectedSegmentIndex = 0
+        modeSelector.selectedSegmentTintColor = LensUI.accent
+        modeSelector.addTarget(self, action: #selector(modeChanged), for: .valueChanged)
+        content.addArrangedSubview(modeSelector)
+        mapScope.selectedSegmentIndex = 0
+        mapScope.selectedSegmentTintColor = LensUI.accent
+        mapScope.addTarget(self, action: #selector(modeChanged), for: .valueChanged)
+        content.addArrangedSubview(mapScope)
+        mapScope.isHidden = true
+
         position.textColor = LensUI.accent
-        position.text = "No route yet"
+        position.font = .systemFont(ofSize: 15, weight: .bold)
+        position.text = "Find a destination to begin"
         content.addArrangedSubview(position)
+
         instruction.textColor = .white
-        instruction.font = .preferredFont(forTextStyle: .title3)
+        instruction.font = .preferredFont(forTextStyle: .body)
         instruction.numberOfLines = 0
-        instruction.text = "Your next turn will appear here."
-        instruction.heightAnchor.constraint(greaterThanOrEqualToConstant: 100).isActive = true
+        instruction.text = "The full next instruction—including the street name—will appear here."
+        instruction.heightAnchor.constraint(greaterThanOrEqualToConstant: 75).isActive = true
         content.addArrangedSubview(LensUI.card(instruction))
-        let row = UIStackView(arrangedSubviews: [previous, nextButton])
-        row.spacing = 12
-        row.distribution = .fillEqually
-        previous.configuration = .filled()
-        previous.configuration?.title = "Previous turn"
-        nextButton.configuration = .filled()
-        nextButton.configuration?.title = "Next turn"
-        previous.addTarget(self, action: #selector(previousStep), for: .touchUpInside)
-        nextButton.addTarget(self, action: #selector(nextStep), for: .touchUpInside)
-        content.addArrangedSubview(row)
+
+        glassesPreview.backgroundColor = .black
+        glassesPreview.contentMode = .scaleAspectFit
+        glassesPreview.layer.cornerRadius = 15
+        glassesPreview.clipsToBounds = true
+        glassesPreview.heightAnchor.constraint(equalToConstant: 220).isActive = true
+        glassesPreview.accessibilityLabel = "Exact screen image queued for ENGO 3"
+        content.addArrangedSubview(glassesPreview)
+
+        pageLabel.textColor = LensUI.accent
+        pageLabel.textAlignment = .center
+        pageLabel.font = .monospacedSystemFont(ofSize: 14, weight: .medium)
+        content.addArrangedSubview(pageLabel)
+        previousPage.configuration = .bordered()
+        previousPage.configuration?.title = "◀ Previous page"
+        nextPage.configuration = .bordered()
+        nextPage.configuration?.title = "Next page ▶"
+        previousPage.addTarget(self, action: #selector(backPage), for: .touchUpInside)
+        nextPage.addTarget(self, action: #selector(forwardPage), for: .touchUpInside)
+        content.addArrangedSubview(buttonRow(previousPage, nextPage))
+        previousTurn.configuration = .filled()
+        previousTurn.configuration?.title = "◀ Previous turn"
+        nextTurn.configuration = .filled()
+        nextTurn.configuration?.title = "Next turn ▶"
+        previousTurn.addTarget(self, action: #selector(backTurn), for: .touchUpInside)
+        nextTurn.addTarget(self, action: #selector(forwardTurn), for: .touchUpInside)
+        content.addArrangedSubview(buttonRow(previousTurn, nextTurn))
+
+        content.addArrangedSubview(LensUI.section("Phone map", detail: "Interactive color map on your phone; black-and-white preview above matches the glasses."))
+        mapView.delegate = self
+        mapView.isRotateEnabled = true
+        mapView.showsCompass = true
+        mapView.showsUserLocation = true
+        mapView.layer.cornerRadius = 16
+        mapView.heightAnchor.constraint(equalToConstant: 235).isActive = true
+        content.addArrangedSubview(mapView)
+        followSwitch.onTintColor = LensUI.accent
+        followSwitch.addTarget(self, action: #selector(changeFollow), for: .valueChanged)
+        let followRow = UIStackView(arrangedSubviews: [
+            LensUI.label("Follow my location on the map", size: 14), followSwitch
+        ])
+        followRow.distribution = .equalSpacing
+        followRow.alignment = .center
+        content.addArrangedSubview(LensUI.card(followRow))
+        content.addArrangedSubview(LensUI.button("Open in Apple Maps for live navigation",
+                                                icon: "map.fill") { [weak self] in self?.openAppleMaps() })
+        content.addArrangedSubview(LensUI.button("Resend current map / instruction",
+                                                icon: "arrow.clockwise") { [weak self] in self?.displayCurrent() })
         status.textColor = LensUI.muted
+        status.font = .systemFont(ofSize: 13)
         status.numberOfLines = 0
-        status.text = "Location is used only to calculate the route."
+        status.text = "Choose a destination. Location is used only for the route and optional moving map dot."
         content.addArrangedSubview(status)
-        updateButtons()
+        content.addArrangedSubview(LensUI.label(
+            "For safety, use phone controls only when stopped. Map frames update periodically, not continuously; verify turns and crossings in the real world.",
+            size: 12, color: LensUI.muted))
+        updateControls()
+    }
+
+    private func buttonRow(_ left: UIView, _ right: UIView) -> UIStackView {
+        let row = UIStackView(arrangedSubviews: [left, right])
+        row.distribution = .fillEqually
+        row.spacing = 12
+        return row
+    }
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        active = true
     }
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
+        active = false
         lookup?.cancel()
         directions?.cancel()
+        mapRenderer.cancel()
+        locationManager.stopUpdatingLocation()
+        OpenLensCanvas.cancelPending()
     }
-    private func updateButtons() {
-        previous.isEnabled = stepIndex > 0
-        nextButton.isEnabled = stepIndex + 1 < steps.count
+    private func updateControls() {
+        previousTurn.isEnabled = stepIndex > 0
+        nextTurn.isEnabled = stepIndex + 1 < steps.count
+        let textMode = modeSelector.selectedSegmentIndex == 0
+        previousPage.isEnabled = textMode && textPageIndex > 0
+        nextPage.isEnabled = textMode && textPageIndex + 1 < textPages.count
+        mapScope.isHidden = textMode
+        pageLabel.text = textMode && !textPages.isEmpty
+            ? "INSTRUCTION PAGE \(textPageIndex + 1) / \(textPages.count)"
+            : "MAP PREVIEW"
     }
     private func findRoute() {
         destination.resignFirstResponder()
-        guard let query = destination.text?.trimmingCharacters(in: .whitespacesAndNewlines), !query.isEmpty else {
-            status.text = "Type a destination first."
+        guard let query = destination.text?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !query.isEmpty else {
+            status.text = "Please enter a destination."
             return
         }
         pendingDestination = query
+        route = nil
         steps = []
-        updateButtons()
-        guard CLLocationManager.locationServicesEnabled() else { status.text = "Enable Location Services in Settings."; return }
-        let auth = locationManager.authorizationStatus
-        switch auth {
+        targetItem = nil
+        textPages = []
+        stepIndex = 0
+        textPageIndex = 0
+        mapRenderer.cancel()
+        updateControls()
+        guard CLLocationManager.locationServicesEnabled() else {
+            status.text = "Location Services are off. Enable them in iPhone Settings."
+            return
+        }
+        switch locationManager.authorizationStatus {
         case .notDetermined:
-            status.text = "Allow location to plan a walking route."
+            status.text = "Allow location access to plan a walking route."
             locationManager.requestWhenInUseAuthorization()
         case .authorizedWhenInUse, .authorizedAlways:
-            status.text = "Getting your current position…"
+            status.text = "Finding your current location…"
             locationManager.requestLocation()
-        default: status.text = "Enable location permission for OpenLens in iPhone Settings."
+        default:
+            status.text = "Allow location for OpenLens in iPhone Settings."
         }
     }
     func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
-        let auth = manager.authorizationStatus
-        if (auth == .authorizedAlways || auth == .authorizedWhenInUse), pendingDestination != nil {
+        let authorization = manager.authorizationStatus
+        if (authorization == .authorizedAlways || authorization == .authorizedWhenInUse),
+           pendingDestination != nil {
             manager.requestLocation()
         }
     }
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
-        guard let here = locations.last, let query = pendingDestination else { return }
-        pendingDestination = nil
+        guard let here = locations.last else { return }
+        lastLocation = here
+        if let query = pendingDestination {
+            pendingDestination = nil
+            findDestination(query, from: here)
+        } else if followSwitch.isOn && !steps.isEmpty && modeSelector.selectedSegmentIndex == 1 &&
+                  Date().timeIntervalSince(lastMapRefresh) > 20 {
+            lastMapRefresh = Date()
+            renderMiniMap()
+        }
+    }
+    func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
+        status.text = "Location unavailable: \(error.localizedDescription)"
+    }
+    private func findDestination(_ query: String, from here: CLLocation) {
         lookup?.cancel()
         directions?.cancel()
         let request = MKLocalSearch.Request()
         request.naturalLanguageQuery = query
-        request.region = MKCoordinateRegion(center: here.coordinate, latitudinalMeters: 25000, longitudinalMeters: 25000)
-        status.text = "Finding destination…"
-        lookup = MKLocalSearch(request: request)
-        lookup?.start { [weak self] response, error in
+        request.region = MKCoordinateRegion(center: here.coordinate, latitudinalMeters: 30000, longitudinalMeters: 30000)
+        status.text = "Searching for your destination…"
+        let search = MKLocalSearch(request: request)
+        lookup = search
+        search.start { [weak self] response, error in
             DispatchQueue.main.async {
-                guard let self = self else { return }
+                guard let self = self, self.active else { return }
                 guard let target = response?.mapItems.first else {
                     self.status.text = error?.localizedDescription ?? "Destination not found."
                     return
                 }
+                self.targetItem = target
                 let plan = MKDirections.Request()
                 plan.source = MKMapItem(placemark: MKPlacemark(coordinate: here.coordinate))
                 plan.destination = target
                 plan.transportType = .walking
                 self.status.text = "Calculating walking directions…"
-                self.directions = MKDirections(request: plan)
-                self.directions?.calculate { [weak self] response, error in
+                let request = MKDirections(request: plan)
+                self.directions = request
+                request.calculate { [weak self] response, error in
                     DispatchQueue.main.async {
-                        guard let self = self else { return }
-                        guard let route = response?.routes.first else {
-                            self.status.text = error?.localizedDescription ?? "No walking route found."
+                        guard let self = self, self.active else { return }
+                        guard let result = response?.routes.first else {
+                            self.status.text = error?.localizedDescription ?? "No walking route could be calculated."
                             return
                         }
-                        self.steps = route.steps.filter { !$0.instructions.isEmpty }
+                        self.route = result
+                        self.steps = result.steps.filter {
+                            !$0.instructions.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                        }
                         self.stepIndex = 0
-                        if self.steps.isEmpty { self.status.text = "Route has no usable turns." }
-                        else { self.showStep() }
+                        guard !self.steps.isEmpty else {
+                            self.status.text = "MapKit returned no instructions for this route."
+                            return
+                        }
+                        self.mapView.removeOverlays(self.mapView.overlays)
+                        self.mapView.addOverlay(result.polyline)
+                        self.mapView.setVisibleMapRect(result.polyline.boundingMapRect,
+                            edgePadding: UIEdgeInsets(top: 38, left: 30, bottom: 38, right: 30),
+                            animated: false)
+                        self.showStep()
                     }
                 }
             }
         }
     }
-    func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
-        status.text = "Location error: \(error.localizedDescription)"
-    }
     private func showStep() {
         guard steps.indices.contains(stepIndex) else { return }
         let step = steps[stepIndex]
-        position.text = "TURN \(stepIndex + 1) / \(steps.count)"
+        let distance = Int(step.distance.rounded())
+        position.text = "TURN \(stepIndex + 1) OF \(steps.count) • ~\(distance) m"
         instruction.text = step.instructions
-        let meters = Int(step.distance.rounded())
-        OpenLensCanvas.show(glasses, title: "WALK \(stepIndex + 1)/\(steps.count)", message: step.instructions)
-        status.text = "Approx. \(meters) m for this step. Manually advance on your phone while stopped."
-        updateButtons()
+        // Keep the ENTIRE instruction as page state, rather than showing only
+        // page one and dropping the street name at the end.
+        textPages = OpenLensText.pages(step.instructions, size: .selected)
+        textPageIndex = 0
+        if step.polyline.pointCount > 0 {
+            let bounds = step.polyline.boundingMapRect
+            if bounds.size.width > 0 && bounds.size.height > 0 {
+                mapView.setVisibleMapRect(bounds,
+                    edgePadding: UIEdgeInsets(top: 70, left: 56, bottom: 70, right: 56),
+                    animated: true)
+            }
+        }
+        displayCurrent()
     }
-    @objc private func previousStep() { guard stepIndex > 0 else { return }; stepIndex -= 1; showStep() }
-    @objc private func nextStep() { guard stepIndex + 1 < steps.count else { return }; stepIndex += 1; showStep() }
+    @objc private func modeChanged() {
+        mapRenderer.cancel()
+        displayCurrent()
+    }
+    @objc private func backTurn() {
+        guard stepIndex > 0 else { return }
+        stepIndex -= 1
+        showStep()
+    }
+    @objc private func forwardTurn() {
+        guard stepIndex + 1 < steps.count else { return }
+        stepIndex += 1
+        showStep()
+    }
+    @objc private func backPage() {
+        guard textPageIndex > 0 else { return }
+        textPageIndex -= 1
+        displayInstructionPage()
+    }
+    @objc private func forwardPage() {
+        guard textPageIndex + 1 < textPages.count else { return }
+        textPageIndex += 1
+        displayInstructionPage()
+    }
+    private func displayCurrent() {
+        updateControls()
+        guard !steps.isEmpty else {
+            status.text = "Search for a route first."
+            return
+        }
+        if modeSelector.selectedSegmentIndex == 0 {
+            mapRenderer.cancel()
+            displayInstructionPage()
+        } else {
+            renderMiniMap()
+        }
+    }
+    private func displayInstructionPage() {
+        guard textPages.indices.contains(textPageIndex) else { return }
+        let lines = textPages[textPageIndex]
+        glassesPreview.image = OpenLensCanvas.show(glasses,
+            title: "WALK TURN \(stepIndex + 1)", lines: lines)
+        updateControls()
+        status.text = "Showing instruction page \(textPageIndex + 1) of \(textPages.count) for turn \(stepIndex + 1). All street names remain available. Allow ~8 seconds between frames."
+    }
+    private func renderMiniMap() {
+        guard let route = route, steps.indices.contains(stepIndex) else { return }
+        updateControls()
+        status.text = "Preparing \(mapScope.selectedSegmentIndex == 1 ? "whole-route" : "next-turn") map for ENGO 3…"
+        mapRenderer.snapshot(route: route, step: steps[stepIndex],
+                             overview: mapScope.selectedSegmentIndex == 1,
+                             currentLocation: lastLocation?.coordinate) { [weak self] image, error in
+            DispatchQueue.main.async {
+                guard let self = self, self.active && self.modeSelector.selectedSegmentIndex == 1 else { return }
+                guard let image = image else {
+                    self.status.text = error ?? "Could not render the map."
+                    return
+                }
+                self.glassesPreview.image = OpenLensCanvas.showImage(self.glasses, image: image)
+                self.lastMapRefresh = Date()
+                self.status.text = "Street map queued for ENGO 3. The thick bright line is this turn; the circle shows location if available. Static preview, not live guidance."
+            }
+        }
+    }
+    @objc private func changeFollow() {
+        if followSwitch.isOn {
+            guard locationManager.authorizationStatus == .authorizedWhenInUse ||
+                  locationManager.authorizationStatus == .authorizedAlways else {
+                followSwitch.isOn = false
+                status.text = "Grant location permission to follow your position."
+                return
+            }
+            locationManager.startUpdatingLocation()
+            mapView.setUserTrackingMode(.follow, animated: true)
+            status.text = "Following phone location. A refreshed map can be sent about every 20 seconds while this screen is open."
+        } else {
+            locationManager.stopUpdatingLocation()
+            mapView.setUserTrackingMode(.none, animated: true)
+        }
+    }
+    private func openAppleMaps() {
+        guard let target = targetItem else {
+            status.text = "Find a destination first."
+            return
+        }
+        target.openInMaps(launchOptions: [MKLaunchOptionsDirectionsModeKey: MKLaunchOptionsDirectionsModeWalking])
+    }
+    func mapView(_ mapView: MKMapView, rendererFor overlay: MKOverlay) -> MKOverlayRenderer {
+        if let line = overlay as? MKPolyline {
+            let renderer = MKPolylineRenderer(polyline: line)
+            renderer.strokeColor = UIColor.systemGreen
+            renderer.lineWidth = 5
+            renderer.lineJoin = .round
+            return renderer
+        }
+        return MKOverlayRenderer(overlay: overlay)
+    }
 }
 
 final class OpenLensDiagnosticsViewController: UIViewController {
