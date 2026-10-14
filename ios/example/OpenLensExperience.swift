@@ -125,10 +125,13 @@ enum OpenLensOrientation {
 
 final class OpenLensHomeViewController: UIViewController {
     private let glasses: Glasses
+    private let beforeDisconnect: (() -> Void)?
+    private var sessionEnded = false
     private let battery = LensUI.label("Reading battery…", size: 14, color: LensUI.muted)
 
-    init(_ glasses: Glasses) {
+    init(_ glasses: Glasses, beforeDisconnect: (() -> Void)? = nil) {
         self.glasses = glasses
+        self.beforeDisconnect = beforeDisconnect
         super.init(nibName: nil, bundle: nil)
     }
     required init?(coder: NSCoder) { fatalError("Use init(glasses)") }
@@ -211,10 +214,16 @@ final class OpenLensHomeViewController: UIViewController {
     override func viewWillAppear(_ animated: Bool) { super.viewWillAppear(animated); updateBattery() }
     override func viewDidDisappear(_ animated: Bool) {
         super.viewDidDisappear(animated)
-        if navigationController?.viewControllers.contains(self) == false { glasses.disconnect() }
+        if navigationController?.viewControllers.contains(self) == false { endSession() }
+    }
+    private func endSession() {
+        guard !sessionEnded else { return }
+        sessionEnded = true
+        beforeDisconnect?()
+        glasses.disconnect()
     }
     @objc private func disconnect() {
-        glasses.disconnect()
+        endSession()
         navigationController?.popToRootViewController(animated: true)
     }
 }
