@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - feature/openlens-ios-foundation
+      - feature/openlens-engo3-experience
   workflow_dispatch:
 
 jobs:
@@ -18,6 +19,17 @@ jobs:
           swift-version: "5.10"
       - name: Test HUD formatting, page layout, dithering and saved cards
         run: swift test --disable-sandbox
+
+  test-relay:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Test private AI relay auth, response parsing and translation
+        run: node --test cloudflare/openlens-relay/worker.test.js
 
   build-ios:
     runs-on: macos-15
