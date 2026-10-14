@@ -5,13 +5,13 @@ OpenLens builds on the official ActiveLook iOS demo / ActiveLookSDK v4.5.5. The 
 ## What changed
 - Synced the user's local Xcode fixes: personal-team signing, bundle identifier, privacy usage descriptions, iOS 15 CocoaPods deployment targeting, Int16 text-coordinate correction, and the ENGO 3 firmware-version workaround.
 - Modern entry, connection list, dashboard, clear back navigation, quick feature actions, battery display and explicit disconnect.
-- Text orientation defaults to \`.topLR\` (instead of the old upside-down \`.bottomRL\`); settings let the user toggle and run an orientation test.
+- Text orientation defaults to `.topLR` (instead of the old upside-down `.bottomRL`); settings let the user toggle and run an orientation test.
 - Repaired the **Disable auto brightness** action, which previously disabled gestures instead of automatic brightness. Device settings can be queried again to verify response.
 - New photo picker: scales images to **192×96**, composites black padding, thresholds to actual black/white for the 1-bit path, offers optional 4-bit compressed streaming, and avoids a known SDK bug in its generic 1-bit stream wrapper (uses x for y). Images are **not immediately deleted**.
 - Added basic transfer-error feedback for SDK flow-control conditions. No new cloud service is required for local display.
 
 ## Physical ENGO 3 tests (required)
-1. On a Mac, open \`ios/example.xcworkspace\` after running \`pod install\` in \`ios\`.
+1. On a Mac, open `ios/example.xcworkspace` after running `pod install` in `ios`.
 2. Choose an iPhone signed to your Apple Personal Team. Run with Command+R.
 3. Scan, tap ENGO 3 and verify the OpenLens dashboard appears.
 4. Verify a real battery percentage (device may take a moment to report it).
@@ -36,9 +36,9 @@ OpenLens builds on the official ActiveLook iOS demo / ActiveLookSDK v4.5.5. The 
 
 ## Sync this branch to an existing Mac checkout
 
-Do **not** delete your working \`~/Documents/Engo\` folder. In Terminal:
+Do **not** delete your working `~/Documents/Engo` folder. In Terminal:
 
-\`\`\`bash
+```bash
 cd ~/Documents/Engo
 git status
 git stash push -u -m "Backup working Xcode changes before OpenLens update"
@@ -47,8 +47,8 @@ git switch feature/openlens-engo3-experience
 cd ios
 pod install
 open example.xcworkspace
-\`\`\`
+```
 
 In Xcode, choose the physical iPhone and Personal Team if prompted, then build/run (Command+R).
 
-This branch contains the saved Xcode changes from the uploaded ZIP, so stashing them does not remove those fixes from the updated version. You can restore the original workspace with \`git switch feature/openlens-ios-foundation\` and \`git stash pop\` **after** checking its working tree is appropriate.
+This branch contains the saved Xcode changes from the uploaded ZIP, so stashing them does not remove those fixes from the updated version. You can restore the original workspace with `git switch feature/openlens-ios-foundation` and `git stash pop` **after** checking its working tree is appropriate.
