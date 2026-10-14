@@ -3,7 +3,7 @@ import XCTest
 
 final class OpenLensTextTests: XCTestCase {
     func testShortMessageHasOnePage() {
-        XCTAssertEqual(OpenLensText.pages("HELLO WORLD"), [["HELLO WORLD"]])
+        XCTAssertEqual(OpenLensText.pages("HELLO WORLD", size: .small), [["HELLO WORLD"]])
     }
     func testEveryLineFitsAndWordsArePreserved() {
         let long = Array(repeating: "The quick brown fox jumped over 42 lazy dogs.", count: 16).joined(separator: " ")
@@ -17,7 +17,7 @@ final class OpenLensTextTests: XCTestCase {
     func testLongUnbrokenWordIsNotDropped() {
         let word = String(repeating: "A", count: 71)
         let lines = OpenLensText.lines(word)
-        XCTAssertEqual(lines.map(\.count), [12,12,12,12,12,11])
+        XCTAssertEqual(lines.map(\.count), Array(repeating: 9, count: 7) + [8])
         XCTAssertEqual(lines.joined(), word)
     }
     func testUnsupportedCharactersAreSafe() {
@@ -62,9 +62,51 @@ final class OpenLensTextTests: XCTestCase {
         XCTAssertEqual(OpenLensDisplayGeometry.photoSizes[2].originY, 32)
     }
     func testConservativeTextLayout() {
-        XCTAssertEqual(OpenLensText.lineWidth, 12)
+        XCTAssertEqual(OpenLensText.lineWidth, OpenLensTextSize.medium.charactersPerLine)
         XCTAssertLessThan(OpenLensDisplayGeometry.defaultTextX + OpenLensText.lineWidth * 14, 304)
         XCTAssertLessThan(OpenLensDisplayGeometry.bodyStartY + OpenLensDisplayGeometry.bodyLineSpacing * 3 + 24, 256)
+    }
+
+    func testAllTextSizesHaveRealSDKFontsAndSafePageGeometry() {
+        XCTAssertEqual(OpenLensTextSize.allCases.map(\.fontID), [0, 2, 3])
+        XCTAssertEqual(OpenLensTextSize.allCases.map(\.fontHeight), [24, 35, 49])
+        XCTAssertEqual(OpenLensTextSize.allCases.map(\.name), ["Small", "Medium", "Large"])
+        XCTAssertEqual(OpenLensTextSize.medium.fontHeight, 35)
+        for size in OpenLensTextSize.allCases {
+            XCTAssertGreaterThan(size.charactersPerLine, 0)
+            XCTAssertGreaterThan(size.linesPerPage, 0)
+            XCTAssertLessThanOrEqual(size.firstLineY + (size.linesPerPage - 1) * size.lineSpacing + size.fontHeight, 256)
+            XCTAssertLessThanOrEqual(42 + size.charactersPerLine * (size.fontHeight / 2), 304)
+        }
+    }
+
+    func testAllSizePresetsPreserveEveryCharacterAcrossPages() {
+        let original = "MESSAGE ONE A very long explanation follows with words and numbers 12345. " +
+                       String(repeating: "XYZ", count: 42) + " END OF MESSAGE!"
+        for size in OpenLensTextSize.allCases {
+            let pages = OpenLensText.pages(original, size: size)
+            XCTAssertGreaterThan(pages.count, 1)
+            XCTAssertTrue(pages.allSatisfy { $0.count <= size.linesPerPage })
+            XCTAssertTrue(pages.flatMap { $0 }.allSatisfy { $0.count <= size.charactersPerLine })
+            let normalized = OpenLensText.sanitize(original).filter { !$0.isWhitespace }
+            let recovered = pages.flatMap { $0 }.joined().filter { !$0.isWhitespace }
+            XCTAssertEqual(recovered, normalized, "Missing characters at size: \(size.name)")
+            XCTAssertTrue(pages.last?.last?.hasSuffix("MESSAGE!") ?? false, "End was dropped for \(size.name)")
+        }
+    }
+
+    func testMorePagesAtLargerTextSizes() {
+        let message = String(repeating: "HELLO WORLD AGAIN ", count: 28)
+        let counts = OpenLensTextSize.allCases.map { OpenLensText.pages(message, size: $0).count }
+        XCTAssertLessThan(counts[0], counts[1])
+        XCTAssertLessThan(counts[1], counts[2])
+    }
+
+    func testLargeFontLongWordsDoNotLoseTrailingCharacters() {
+        let word = String(repeating: "X", count: 151) + "Z"
+        let pages = OpenLensText.pages(word, size: .large)
+        XCTAssertEqual(pages.flatMap { $0 }.joined(), word)
+        XCTAssertEqual(pages.last?.last?.last, "Z")
     }
 
     func testCardsJSONRoundTrip() throws {
