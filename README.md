@@ -8,11 +8,12 @@ Real iOS app based on the official ActiveLook demo-app, preserving **all 37 orig
 - Typed text rendered via official ActiveLook SDK drawing commands, from the same connected Glasses object as the demo.
 - iPhone microphone speech recognition captions with English, Spanish, French source-language options; starts and stops explicitly.
 - AI question workflow that POSTs to a user-configured private HTTPS relay, expects JSON { "text": "short answer" }; no API keys in code.
+- Explicit translation request for current text/transcript, with selectable English, Spanish, French, Hindi or Telugu target language, using the same user-configured relay.
 - First walking direction from iPhone Location Services, MapKit search and MKDirections (NOT live navigation).
 
 ## Pending / limitations
 
-**Not yet compiled in Xcode or tested on ENGO 3.** Legacy SDK from vendor demo uses v4.5.5 and may not expose ENGO 3 color features. Text orientation and font measurements need real-glasses testing. Speech languages are *transcription*, NOT translation yet. There is no automatic iMessage access, live translation, AI backend server, phone control, or continuously refreshed navigation. Avoid relying on this first-turn display while driving or cycling.
+**Not yet compiled in Xcode or tested on ENGO 3.** Legacy SDK from vendor demo uses v4.5.5 and may not expose ENGO 3 color features. Text orientation and font measurements need real-glasses testing. Speech recognition produces source-language captions. An explicit **Translate current transcript** command now sends typed/transcribed text to your own configured HTTPS relay and displays the returned translation. The relay server itself is not included. There is no automatic iMessage access, live translation, AI backend server, phone control, or continuously refreshed navigation. Avoid relying on this first-turn display while driving or cycling.
 
 ## Run
 
@@ -27,7 +28,8 @@ Real iOS app based on the official ActiveLook demo-app, preserving **all 37 orig
 ## AI relay protocol
 
 Configure Settings -> Set HTTPS AI relay. POST application/json:
-{ "mode": "ai", "text": "What is a parsec?" }
+{ "mode": "ai", "text": "What is a parsec?", "target_language": "en" }
+Translation example: { "mode": "translate", "text": "Hola, buenos dias", "target_language": "en" }
 Response (HTTP 200): { "text": "An astronomical distance unit." }
 The relay is NOT included. Keep OpenAI secrets on an authenticated, rate-limited server—not in this public repo or phone app. Only send user-consented text.
 

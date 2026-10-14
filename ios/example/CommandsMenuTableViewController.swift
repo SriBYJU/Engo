@@ -167,6 +167,7 @@ final class OpenLensHUDViewController: UIViewController, CLLocationManagerDelega
     private var transcript = ""
     private var lastUpdate = Date.distantPast
     private let modes = ["HUD", "CAPTIONS", "AI", "MAPS"]
+    private var translationLanguage = "en"
     private let segment = UISegmentedControl(items: ["HUD", "Captions", "AI", "Maps"])
     private let field = UITextField()
     private let preview = UILabel()
@@ -385,6 +386,10 @@ final class OpenLensHUDViewController: UIViewController, CLLocationManagerDelega
     // The app never embeds an OpenAI API key. Configure a private authenticated
     // HTTPS relay returning JSON {"text":"..."}; do not deploy it publicly unauthenticated.
     private func askRelay(_ question: String) {
+        callRelay(mode: "ai", text: question, targetLanguage: "en")
+    }
+
+    private func callRelay(mode: String, text: String, targetLanguage: String) {
         guard let raw = UserDefaults.standard.string(forKey: "openlens.relay"),
               let url = URL(string: raw), url.scheme == "https" else {
             status.text = "Set your HTTPS AI relay URL in Settings first."
@@ -393,15 +398,15 @@ final class OpenLensHUDViewController: UIViewController, CLLocationManagerDelega
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = try? JSONSerialization.data(withJSONObject: ["mode": "ai", "text": question])
-        status.text = "Waiting for AI response..."
+        request.httpBody = try? JSONSerialization.data(withJSONObject: ["mode": mode, "text": text, "target_language": targetLanguage])
+        status.text = mode == "translate" ? "Translating text..." : "Waiting for AI response..."
         URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
             let code = (response as? HTTPURLResponse)?.statusCode ?? 0
             let json = data.flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }
             DispatchQueue.main.async {
                 guard let self = self else { return }
                 if (200..<300).contains(code), let answer = json?["text"] as? String {
-                    self.draw("OPENLENS / AI", answer)
+                    self.draw(mode == "translate" ? "OPENLENS / TRANSLATE" : "OPENLENS / AI", answer)
                 } else {
                     self.status.text = error?.localizedDescription ?? "AI relay error (HTTP \(code))."
                 }
@@ -460,10 +465,34 @@ final class OpenLensHUDViewController: UIViewController, CLLocationManagerDelega
                 self.status.text = "Speech language " + name + " (transcription only)."
             })
         }
+        menu.addAction(UIAlertAction(title: "Translate current transcript", style: .default) { _ in self.translateCurrentText() })
+        menu.addAction(UIAlertAction(title: "Translation target language", style: .default) { _ in self.chooseTranslationLanguage() })
         menu.addAction(UIAlertAction(title: "Set HTTPS AI relay", style: .default) { _ in self.configureRelay() })
         menu.addAction(UIAlertAction(title: "Cancel", style: .cancel))
         menu.popoverPresentationController?.barButtonItem = navigationItem.rightBarButtonItem
         present(menu, animated: true)
+    }
+
+
+    // Live captions stay on-device where supported. Translation is explicitly
+    // requested, and uses the user-configured HTTPS relay; it is not automatic.
+    private func chooseTranslationLanguage() {
+        let picker = UIAlertController(title: "Translate into", message: "Choose the output language.", preferredStyle: .actionSheet)
+        for (name, code) in [("English", "en"), ("Spanish", "es"), ("French", "fr"), ("Hindi", "hi"), ("Telugu", "te")] {
+            picker.addAction(UIAlertAction(title: name, style: .default) { _ in
+                self.translationLanguage = code
+                self.status.text = "Translation target: " + name
+            })
+        }
+        picker.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        picker.popoverPresentationController?.barButtonItem = navigationItem.rightBarButtonItem
+        present(picker, animated: true)
+    }
+
+    private func translateCurrentText() {
+        let text = field.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard !text.isEmpty else { status.text = "Speak or type something first."; return }
+        callRelay(mode: "translate", text: text, targetLanguage: translationLanguage)
     }
 
     private func configureRelay() {
