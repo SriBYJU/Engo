@@ -161,25 +161,28 @@ final class OpenLensHUDViewController: UIViewController, CLLocationManagerDelega
     private var listening = false
     private var transcript = ""
     private var lastUpdate = Date.distantPast
-    private let modes = ["HUD", "CAPTIONS", "AI", "MAPS"]
+    private let modes = ["TEXT", "CAPTIONS", "AI"]
     private var translationLanguage = "en"
-    private let segment = UISegmentedControl(items: ["HUD", "Captions", "AI", "Maps"])
+    private let segment = UISegmentedControl(items: ["Text", "Captions", "AI"])
     private let field = UITextField()
     private let preview = UILabel()
+    private let pagesButton = UIButton(type: .system)
+    private var fullMessage = ""
+    private var fullHeading = ""
     private let status = UILabel()
     private let mic = UIButton(type: .system)
     private let send = UIButton(type: .system)
 
     init(_ glasses: Glasses, initialMode: Int = 0) {
         self.glasses = glasses
-        self.initialMode = max(0, min(3, initialMode))
+        self.initialMode = max(0, min(2, initialMode))
         super.init(nibName: nil, bundle: nil)
     }
     required init?(coder: NSCoder) { fatalError("Use init(glasses)") }
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        title = "OpenLens"
+        title = "Text & AI"
         view.backgroundColor = UIColor(red: 0.045, green: 0.072, blue: 0.06, alpha: 1)
         navigationItem.rightBarButtonItem = UIBarButtonItem(title: "Options", style: .plain, target: self, action: #selector(settings))
         locationManager.delegate = self
@@ -230,7 +233,12 @@ final class OpenLensHUDViewController: UIViewController, CLLocationManagerDelega
         status.numberOfLines = 0
         status.textColor = .lightGray
         status.font = .systemFont(ofSize: 12)
-        let stack = UIStackView(arrangedSubviews: [heading, title, subtitle, segment, field, send, mic, preview, status])
+        pagesButton.setTitle("Open full text in Presenter →", for: .normal)
+        pagesButton.setTitleColor(accent, for: .normal)
+        pagesButton.titleLabel?.font = .systemFont(ofSize: 15, weight: .semibold)
+        pagesButton.addTarget(self, action: #selector(openPages), for: .touchUpInside)
+        pagesButton.isHidden = true
+        let stack = UIStackView(arrangedSubviews: [heading, title, subtitle, segment, field, send, mic, preview, pagesButton, status])
         stack.axis = .vertical
         stack.spacing = 17
         stack.translatesAutoresizingMaskIntoConstraints = false
@@ -261,39 +269,35 @@ final class OpenLensHUDViewController: UIViewController, CLLocationManagerDelega
     @objc private func modeChanged() {
         stopSpeech(submit: false)
         let i = segment.selectedSegmentIndex
-        let labels = ["Your message", "Use iPhone microphone", "Ask AI (needs your HTTPS relay)", "Walking destination"]
+        let labels = ["Your message", "Use iPhone microphone", "Ask AI (needs your HTTPS relay)"]
         field.placeholder = labels[i]
-        send.setTitle(i == 3 ? "Find next turn" : i == 2 ? "Ask AI" : "Show on glasses", for: .normal)
-        mic.isHidden = i == 3
-        status.text = "Mode ready. Enter text, or start listening."
+        send.setTitle(i == 2 ? "Ask AI" : "Show on glasses", for: .normal)
+        mic.isHidden = i == 0
+        status.text = i == 1 ? "Start listening to show live captions." : i == 2 ? "AI requires a private relay configured in Options." : "Type text to send to the glasses."
     }
 
     // Reuses the same vendor SDK calls from GraphicsCommandsViewController.
     // Avoid Unicode in the legacy hardware font; break into short lines.
     private func draw(_ heading: String, _ message: String) {
-        let normalized = message.folding(options: .diacriticInsensitive, locale: Locale(identifier: "en_US"))
-        let safe = normalized.unicodeScalars.map { $0.isASCII ? String($0) : " " }.joined()
-        var lines = [String]()
-        var current = ""
-        for word in safe.split(separator: " ").map(String.init) {
-            if current.count + word.count + 1 > 24 && !current.isEmpty {
-                lines.append(current)
-                current = ""
-            }
-            current += (current.isEmpty ? "" : " ") + String(word.prefix(24))
-            if lines.count == 4 { break }
-        }
-        if !current.isEmpty && lines.count < 5 { lines.append(current) }
-        glasses.clear()
-        glasses.color(level: 15)
-        glasses.txt(x: 8, y: 12, rotation: OpenLensOrientation.rotation, font: 2, color: 15, string: String(heading.prefix(27)))
-        glasses.line(x0: 8, x1: 290, y0: 39, y1: 39)
-        for (i, line) in lines.enumerated() {
-            glasses.txt(x: 8, y: Int16(57 + i * 34), rotation: OpenLensOrientation.rotation, font: 2, color: 15, string: line)
-        }
-        preview.text = heading + "\n\n" + lines.joined(separator: "\n")
+        let pages = OpenLensText.pages(message)
+        let latestCaptions = heading.contains("CAPTIONS")
+        let selected = latestCaptions ? (pages.last ?? []) : (pages.first ?? [])
+        OpenLensCanvas.show(glasses, title: heading, lines: selected)
+        fullHeading = heading
+        fullMessage = message
+        pagesButton.isHidden = pages.count < 2
+        let pageLabel = latestCaptions ? pages.count : 1
+        preview.text = heading + "\n\n" + selected.joined(separator: "\n")
         lastUpdate = Date()
-        status.text = "Text queued for ENGO 3. Check the display."
+        status.text = pages.count > 1
+            ? "Page \(pageLabel) of \(pages.count) queued. Open Presenter to view all pages."
+            : "Display commands queued. Confirm the text on your ENGO 3."
+    }
+
+    @objc private func openPages() {
+        guard !fullMessage.isEmpty else { return }
+        let controller = OpenLensPresenterViewController(glasses, title: fullHeading, body: fullMessage)
+        navigationController?.pushViewController(controller, animated: true)
     }
 
     @objc private func sendPressed() {
@@ -302,7 +306,6 @@ final class OpenLensHUDViewController: UIViewController, CLLocationManagerDelega
         if text.isEmpty { status.text = "Enter a message first."; return }
         switch segment.selectedSegmentIndex {
         case 2: askRelay(text)
-        case 3: route(to: text)
         default: draw("OPENLENS / " + modes[segment.selectedSegmentIndex], text)
         }
     }
@@ -350,7 +353,7 @@ final class OpenLensHUDViewController: UIViewController, CLLocationManagerDelega
                     if let speech = result?.bestTranscription.formattedString {
                         self.transcript = speech
                         self.field.text = speech
-                        if self.segment.selectedSegmentIndex != 2 && Date().timeIntervalSince(self.lastUpdate) > 1.2 {
+                        if self.segment.selectedSegmentIndex == 1 && Date().timeIntervalSince(self.lastUpdate) > 1.8 {
                             self.draw("OPENLENS / LIVE CAPTIONS", speech)
                         }
                     }
