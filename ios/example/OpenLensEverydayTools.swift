@@ -25,6 +25,48 @@ enum OpenLensBitmapSettings {
 }
 
 enum OpenLensCanvas {
+    // A full-screen 1-bit image consists of many BLE packets. Keep frames from
+    // overlapping: the newest pending frame replaces an obsolete one.
+    private static let minimumFrameSpacing: TimeInterval = 4.0
+    private static var lastFrameAt: Date = .distantPast
+    private static var pendingFrame: (glasses: Glasses, image: UIImage)?
+    private static var flushScheduled = false
+
+    static func cancelPending() {
+        if Thread.isMainThread { pendingFrame = nil }
+        else { DispatchQueue.main.async { pendingFrame = nil } }
+    }
+
+    private static func send(_ glasses: Glasses, image: UIImage) {
+        lastFrameAt = Date()
+        glasses.clear()
+        glasses.imgStream1bpp(image: image,
+                              x: Int16(OpenLensDisplayGeometry.textImageX),
+                              y: Int16(OpenLensDisplayGeometry.textImageY))
+    }
+
+    private static func enqueue(_ glasses: Glasses, image: UIImage) {
+        guard Thread.isMainThread else {
+            DispatchQueue.main.async { enqueue(glasses, image: image) }
+            return
+        }
+        let remaining = minimumFrameSpacing - Date().timeIntervalSince(lastFrameAt)
+        if remaining <= 0 && !flushScheduled {
+            pendingFrame = nil
+            send(glasses, image: image)
+            return
+        }
+        pendingFrame = (glasses, image)
+        guard !flushScheduled else { return }
+        flushScheduled = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + max(0.05, remaining)) {
+            flushScheduled = false
+            guard let frame = pendingFrame else { return }
+            pendingFrame = nil
+            send(frame.glasses, image: frame.image)
+        }
+    }
+
     /// Only user's message is displayed. No OPENLENS header or divider can
     /// consume space, overlap another line, or appear as stray fragments.
     /// Accurate 304×240 rendering, full 1-bit framebuffer, centered at (0,8).
@@ -57,6 +99,9 @@ enum OpenLensCanvas {
         ]
         let renderer = UIGraphicsImageRenderer(size: CGSize(width: width, height: height),
                                                format: format)
+        let approximateBlockHeight =
+            CGFloat(max(0, printable.count - 1) * size.lineSpacing) + font.lineHeight
+        let originY = max(8, (CGFloat(height) - approximateBlockHeight) / 2)
         let image = renderer.image { _ in
             UIColor.black.setFill()
             UIRectFill(CGRect(x: 0, y: 0, width: width, height: height))
@@ -65,7 +110,7 @@ enum OpenLensCanvas {
                 let measured = text.size(withAttributes: attrs)
                 let x = (printable.count == 1 ? (CGFloat(width) - measured.width) / 2 : inset)
                         + CGFloat(OpenLensBitmapSettings.offsetX)
-                let y = CGFloat(size.firstLineY + i * size.lineSpacing)
+                let y = originY + CGFloat(i * size.lineSpacing)
                         + CGFloat(OpenLensBitmapSettings.offsetY)
                 text.draw(at: CGPoint(x: x, y: y), withAttributes: attrs)
             }
@@ -82,11 +127,9 @@ enum OpenLensCanvas {
     static func show(_ glasses: Glasses, title: String, lines: [String],
                      size: OpenLensTextSize = .selected) -> UIImage {
         let image = render(lines: lines, size: size)
-        glasses.clear()
         // The same proven API as Photos, not the SDK native text renderer.
-        glasses.imgStream1bpp(image: image,
-                              x: Int16(OpenLensDisplayGeometry.textImageX),
-                              y: Int16(OpenLensDisplayGeometry.textImageY))
+        // A cooldown prevents fragments from successive frames interleaving.
+        enqueue(glasses, image: image)
         return image
     }
 
