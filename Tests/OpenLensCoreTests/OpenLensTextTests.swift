@@ -17,7 +17,7 @@ final class OpenLensTextTests: XCTestCase {
     func testLongUnbrokenWordIsNotDropped() {
         let word = String(repeating: "A", count: 71)
         let lines = OpenLensText.lines(word)
-        XCTAssertEqual(lines.map(\.count), [14,14,14,14,14,1])
+        XCTAssertEqual(lines.map(\.count), [12,12,12,12,12,11])
         XCTAssertEqual(lines.joined(), word)
     }
     func testUnsupportedCharactersAreSafe() {
@@ -62,7 +62,7 @@ final class OpenLensTextTests: XCTestCase {
         XCTAssertEqual(OpenLensDisplayGeometry.photoSizes[2].originY, 32)
     }
     func testConservativeTextLayout() {
-        XCTAssertEqual(OpenLensText.lineWidth, 14)
+        XCTAssertEqual(OpenLensText.lineWidth, 12)
         XCTAssertLessThan(OpenLensDisplayGeometry.defaultTextX + OpenLensText.lineWidth * 14, 304)
         XCTAssertLessThan(OpenLensDisplayGeometry.bodyStartY + OpenLensDisplayGeometry.bodyLineSpacing * 3 + 24, 256)
     }
