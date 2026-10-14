@@ -545,7 +545,7 @@ final class OpenLensHUDViewController: UIViewController, CLLocationManagerDelega
                 if (200..<300).contains(code), payload?["status"] as? String == "ok" {
                     let ready = payload?["configured"] as? Bool ?? false
                     self.status.text = ready
-                        ? "AI relay connected. You can now ask questions or translate."
+                        ? "Relay URL is reachable and reports configured. Send a short AI question to verify the model."
                         : "Relay is online, but server AI credentials or model are missing."
                 } else if code == 401 {
                     self.status.text = "Relay rejected the client token. Check the token in Set up AI."
