@@ -54,7 +54,7 @@ enum OpenLensRGBImage {
 enum OpenLensCanvas {
     // A full-screen 1-bit image consists of many BLE packets. Keep frames from
     // overlapping: the newest pending frame replaces an obsolete one.
-    private static let minimumFrameSpacing: TimeInterval = 4.0
+    private static let minimumFrameSpacing: TimeInterval = 8.0
     private static var lastFrameAt: Date = .distantPast
     private static var pendingFrame: (glasses: Glasses, image: UIImage)?
     private static var lastError: String?
