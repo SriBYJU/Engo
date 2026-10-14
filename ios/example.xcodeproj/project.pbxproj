@@ -35,6 +35,8 @@
 		B5D7C5792948D15000F55A70 /* ImagePicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5D7C5762948D15000F55A70 /* ImagePicker.swift */; };
 		B5D7C57A2948D15000F55A70 /* ImagePickerViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5D7C5772948D15000F55A70 /* ImagePickerViewController.swift */; };
 		A1B2C3D4E5F60718293A4B5D /* OpenLensExperience.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B5C /* OpenLensExperience.swift */; };
+		A1B2C3D4E5F60718293A4B5F /* OpenLensText.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B5E /* OpenLensText.swift */; };
+		A1B2C3D4E5F60718293A4B61 /* OpenLensEverydayTools.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B60 /* OpenLensEverydayTools.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -70,6 +72,8 @@
 		B5D7C5762948D15000F55A70 /* ImagePicker.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ImagePicker.swift; sourceTree = "<group>"; };
 		B5D7C5772948D15000F55A70 /* ImagePickerViewController.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ImagePickerViewController.swift; sourceTree = "<group>"; };
 		A1B2C3D4E5F60718293A4B5C /* OpenLensExperience.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenLensExperience.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F60718293A4B5E /* OpenLensText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenLensText.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F60718293A4B60 /* OpenLensEverydayTools.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenLensEverydayTools.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -110,6 +114,8 @@
 				2307D96E27329CBA000732DC /* Assets.xcassets */,
 				2307D9852732C1CB000732DC /* CommandsMenuTableViewController.swift */,
                 A1B2C3D4E5F60718293A4B5C /* OpenLensExperience.swift */,
+                A1B2C3D4E5F60718293A4B60 /* OpenLensEverydayTools.swift */,
+                A1B2C3D4E5F60718293A4B5E /* OpenLensText.swift */,
 				2307D97C2732C1CB000732DC /* CommandsTableViewController.swift */,
 				2307D9842732C1CB000732DC /* ConfigurationCommandsViewController.swift */,
 				2307D9872732C1CB000732DC /* DisplayCommandsViewController.swift */,
@@ -304,6 +310,8 @@
 				2307D98B2732C1CB000732DC /* CommandsTableViewController.swift in Sources */,
 				2307D9942732C1CB000732DC /* CommandsMenuTableViewController.swift in Sources */,
                 A1B2C3D4E5F60718293A4B5D /* OpenLensExperience.swift in Sources */,
+                A1B2C3D4E5F60718293A4B61 /* OpenLensEverydayTools.swift in Sources */,
+                A1B2C3D4E5F60718293A4B5F /* OpenLensText.swift in Sources */,
 				2307D98C2732C1CB000732DC /* StatisticsCommandsViewController.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
