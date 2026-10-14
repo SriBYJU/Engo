@@ -301,6 +301,17 @@ final class OpenLensHUDViewController: UIViewController, CLLocationManagerDelega
         modeChanged()
     }
 
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        if fontSelector.selectedSegmentIndex != OpenLensTextSize.selected.rawValue {
+            fontSelector.selectedSegmentIndex = OpenLensTextSize.selected.rawValue
+            updateFontDetail()
+            if !fullMessage.isEmpty {
+                rebuildPages(startAtLatest: fullHeading.contains("CAPTIONS"))
+            }
+        }
+    }
+
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
         stopSpeech(submit: false)
