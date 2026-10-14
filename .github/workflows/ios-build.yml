@@ -1,0 +1,27 @@
+name: OpenLens iOS Build
+
+on:
+  pull_request:
+  push:
+    branches:
+      - feature/openlens-ios-foundation
+  workflow_dispatch:
+
+jobs:
+  build-ios:
+    runs-on: macos-15
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install ActiveLook SDK dependency
+        working-directory: ios
+        run: |
+          gem install cocoapods --no-document
+          pod install
+      - name: Build unsigned iOS simulator app
+        run: |
+          set -o pipefail
+          xcodebuild -workspace ios/example.xcworkspace \
+            -scheme example -configuration Debug \
+            -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO build

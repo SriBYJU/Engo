@@ -31,7 +31,7 @@ Configure Settings -> Set HTTPS AI relay. POST application/json:
 { "mode": "ai", "text": "What is a parsec?", "target_language": "en" }
 Translation example: { "mode": "translate", "text": "Hola, buenos dias", "target_language": "en" }
 Response (HTTP 200): { "text": "An astronomical distance unit." }
-The relay is NOT included. Keep OpenAI secrets on an authenticated, rate-limited server—not in this public repo or phone app. Only send user-consented text.
+A sample private Cloudflare Worker relay is now included in the relay/ directory. Deploy it with its two required secrets and enter its URL and client token in Settings. Keep OpenAI secrets on an authenticated, rate-limited server—not in this public repo or phone app. Only send user-consented text.
 
 ## Attribution and public references
 
@@ -47,3 +47,7 @@ The relay is NOT included. Keep OpenAI secrets on an authenticated, rate-limited
 3. Add real iPhone speech-to-translation-to-HUD with user-selected language pair.
 4. Add authenticated AI relay; then privacy-filtered supported notifications.
 5. Add continuous walking guidance and approved App Intents/Shortcuts actions.
+
+## Deployment and checks
+
+The relay implementation and security/deployment notes live in relay/README.md. Build validation is configured in GitHub Actions on macOS. A passing CI build verifies compilation only, **not** display compatibility or physical-device behavior. Do not put API keys or client tokens in GitHub.
