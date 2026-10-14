@@ -1,0 +1,6 @@
+name = "openlens-relay"
+main = "src/index.js"
+compatibility_date = "2026-10-13"
+
+[secrets]
+required = ["OPENAI_API_KEY", "OPENLENS_CLIENT_TOKEN"]
