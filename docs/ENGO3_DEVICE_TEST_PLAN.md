@@ -5,7 +5,7 @@ OpenLens builds on the official ActiveLook iOS demo / ActiveLookSDK v4.5.5. The 
 ## What changed
 - Synced the user's local Xcode fixes: personal-team signing, bundle identifier, privacy usage descriptions, iOS 15 CocoaPods deployment targeting, Int16 text-coordinate correction, and the ENGO 3 firmware-version workaround.
 - Modern entry, connection list, dashboard, clear back navigation, quick feature actions, battery display and explicit disconnect.
-- Text uses a smaller 24px font, 12-character lines, safe optical margins, mirrored rotation anchors, and adjustable horizontal/vertical text positioning. The full-width divider was removed. Text orientation defaults to `.topLR` and can be toggled.
+- Text offers Small 24px, Medium 35px (default) and Large 49px fonts. Wrapping, spacing and pagination adapt to the selection. Multiline messages remain available through Previous/Next. Safe margins, rotation and X/Y calibration are preserved.
 - Repaired the **Disable auto brightness** action, which previously disabled gestures instead of automatic brightness. Device settings can be queried again to verify response.
 - Photo sizes are **Small 160×96**, **Medium 208×144**, **Large 240×192 (default)** and **Full 304×240**. The preview simulates actual screen coverage. Fit/fill, invert, 180-degree rotation, 1-bit high contrast/dither or 4-bit compressed grayscale remain available. Images are not deleted immediately.
 - Added basic transfer-error feedback for SDK flow-control conditions. No new cloud service is required for local display.
@@ -15,8 +15,8 @@ OpenLens builds on the official ActiveLook iOS demo / ActiveLookSDK v4.5.5. The 
 2. Choose an iPhone signed to your Apple Personal Team. Run with Command+R.
 3. Scan, tap ENGO 3 and verify the OpenLens dashboard appears.
 4. Verify a real battery percentage (device may take a moment to report it).
-5. Open **Glasses settings** and tap **Show orientation test**. Confirm the four short rows are readable and not clipped. If upside down, select **Rotated 180°**, test again. Use text-position sliders to move within the visible field. If settings report an existing hardware X/Y shift, the app offers a separate, confirmed hardware shift reset.
-6. From **Send text**, display "HELLO FROM OPENLENS". Verify text is readable and not clipped.
+5. Open **Glasses settings**, choose each text size and tap **Show orientation test**. Confirm the HELLO sample is readable and not clipped. If upside down, select **Rotated 180°**, test again. Use text-position sliders to move within the visible field. If settings report an existing hardware X/Y shift, the app offers a separate, confirmed hardware shift reset.
+6. Open the Text tile, select Medium 35px, type a multiline message of at least 200 characters and tap Show on glasses. Use Next repeatedly to find the very last word. Use Previous to verify paging backward. Repeat with Large 49px and Small 24px. Every word must remain accessible as the page count changes.
 7. Open **Display a photo**, choose **Use built-in test pattern**, set High contrast and **Large (240×192)**, then show it. Confirm the image on the *glasses*, not only the phone. Repeat with Small, Medium and Full, checking clipping and transmission delays.
 8. Try dither and grayscale only after High contrast succeeds. Watch Xcode console for flow-control overflows. Larger sizes contain more data and may take longer. Full size may be optically clipped.
 9. Turn automatic brightness off, adjust manual brightness, then **Refresh actual settings**. Confirm the device reports the new values.
