@@ -24,12 +24,40 @@ enum OpenLensBitmapSettings {
     }
 }
 
+/// ActiveLookSDK v4.5.5 hard-asserts that a streamed UIImage's CGImage
+/// uses the RGB color-space model. UIGraphicsImageRenderer can produce
+/// an extended/monochrome CGImage on some devices, so explicitly normalize.
+enum OpenLensRGBImage {
+    static func normalize(_ source: UIImage) -> UIImage? {
+        guard let original = source.cgImage else { return nil }
+        let width = original.width
+        let height = original.height
+        guard width > 0 && height > 0 else { return nil }
+        let colorSpace = CGColorSpaceCreateDeviceRGB()
+        let flags = CGBitmapInfo.byteOrder32Big.rawValue |
+                    CGImageAlphaInfo.premultipliedLast.rawValue
+        guard let context = CGContext(data: nil, width: width, height: height,
+                                      bitsPerComponent: 8, bytesPerRow: width * 4,
+                                      space: colorSpace, bitmapInfo: flags) else { return nil }
+        context.interpolationQuality = .none
+        // Convert raster data into a standard RGBA8 device-RGB backed image.
+        context.draw(original, in: CGRect(x: 0, y: 0, width: width, height: height))
+        guard let rgb = context.makeImage(),
+              rgb.colorSpace?.model == .rgb,
+              rgb.bitsPerComponent == 8,
+              rgb.bitsPerPixel == 32,
+              rgb.dataProvider?.data != nil else { return nil }
+        return UIImage(cgImage: rgb, scale: 1, orientation: .up)
+    }
+}
+
 enum OpenLensCanvas {
     // A full-screen 1-bit image consists of many BLE packets. Keep frames from
     // overlapping: the newest pending frame replaces an obsolete one.
     private static let minimumFrameSpacing: TimeInterval = 4.0
     private static var lastFrameAt: Date = .distantPast
     private static var pendingFrame: (glasses: Glasses, image: UIImage)?
+    private static var lastError: String?
     private static var flushScheduled = false
 
     static func cancelPending() {
@@ -38,9 +66,15 @@ enum OpenLensCanvas {
     }
 
     private static func send(_ glasses: Glasses, image: UIImage) {
+        guard let rgb = OpenLensRGBImage.normalize(image) else {
+            lastError = "Unable to produce an 8-bit RGB image; not sent."
+            print("OpenLens:", lastError ?? "Invalid image")
+            return
+        }
+        lastError = nil
         lastFrameAt = Date()
         glasses.clear()
-        glasses.imgStream1bpp(image: image,
+        glasses.imgStream1bpp(image: rgb,
                               x: Int16(OpenLensDisplayGeometry.textImageX),
                               y: Int16(OpenLensDisplayGeometry.textImageY))
     }
