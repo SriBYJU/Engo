@@ -131,6 +131,32 @@ final class OpenLensTextTests: XCTestCase {
         XCTAssertEqual(pages.last?.last?.last, "Z")
     }
 
+    func testWalkingDirectionsNeverDropStreetNames() {
+        let complete = "Turn right onto North Parham Road, continue onto West Broad Street, " +
+                       "then turn left toward Three Chopt Road."
+        for size in OpenLensTextSize.allCases {
+            let pages = OpenLensText.pages(complete, size: size)
+            let reconstructed = pages.flatMap { $0 }.joined()
+            let expected = OpenLensText.sanitize(complete)
+            XCTAssertEqual(reconstructed.filter { !$0.isWhitespace },
+                           expected.filter { !$0.isWhitespace },
+                           "A road name or trailing direction was lost at \(size.name)")
+            XCTAssertTrue(reconstructed.hasSuffix("Road."))
+            XCTAssertTrue(pages.allSatisfy { $0.count <= size.linesPerPage })
+        }
+    }
+
+    func testLongStreetNameSplitStillPreservesFullSpelling() {
+        let instruction = "Continue straight onto " +
+                          "ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890 Boulevard."
+        for size in OpenLensTextSize.allCases {
+            let pages = OpenLensText.pages(instruction, size: size)
+            let allCharacters = pages.flatMap { $0 }.joined()
+            XCTAssertTrue(allCharacters.contains("ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890"))
+            XCTAssertTrue(allCharacters.hasSuffix("Boulevard."))
+        }
+    }
+
     func testCardsJSONRoundTrip() throws {
         let card = OpenLensCard(title: "Meeting", body: "Remember the intro")
         let payload = try JSONEncoder().encode([card])
