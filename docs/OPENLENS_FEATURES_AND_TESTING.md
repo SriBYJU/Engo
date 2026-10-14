@@ -10,22 +10,22 @@ This branch extends the user's previously working ActiveLook iOS demo instead of
 - **Quick cards:** four starter cards, custom saved cards on the iPhone, edit and delete, tap to open on glasses.
 - **Presenter:** paste a talk or notes; page through long text with Previous/Next; change text size and repaginate the complete script; optional 10-second auto-advance while this screen is open.
 - **Focus and clock:** 5/15/25-minute timer, pause, resume, reset, periodic text updates, manual phone clock display. This is *not* a background alarm.
-- **Walking routes:** MapKit walking search, multi-step route preview, manual Next/Previous while stationary. This is *not* automatic or safety-critical navigation.
+- **Walking routes:** switch between complete walking instructions and a genuine high-contrast MapKit **Street map** sent as a 304×240 1-bit HUD image. Route-line overlays, start/destination and position markers, North indication, Apple map attribution, next-turn vs whole-route views, interactive color map on iPhone, optional periodic GPS-dot updates, manual Next/Previous turns, and separate Next/Previous **text pages**. Automatically chooses a smaller bitmap font if that makes the complete street name visible on the first frame; never silently truncates instructions. Apple Maps handoff for actual live navigation. Not spatially anchored AR, background navigation, or a safety-critical guide.
 - **Device settings:** luminance, automatic brightness, gesture detection and readback; orientation calibration, horizontal/vertical text placement sliders, hardware screen-shift diagnostics/reset with confirmation, alignment test.
 - **Diagnostics:** battery, firmware, serial, actual reported settings, copy diagnostic output, clear display.
-- **AI and translation:** existing private HTTPS relay architecture, no embedded API secret; requires user-controlled relay to work.
+- **AI and translation:** new deployable Cloudflare Worker using OpenAI Responses API, separate client bearer token, server-side API key, model selection, quota/error handling and optional Worker rate limiter. The iPhone exposes Set up AI and Test AI connection, uses Keychain for the client token, and paginates long model answers. **Not connected until the user deploys the relay and configures their credentials**; see `cloudflare/openlens-relay/README.md`.
 - **Original demo commands:** kept under Advanced Tools. Commands unsupported by ENGO 3 firmware may not work.
 
 Firmware update authorization is intentionally NOT automatic in this experimental app. Use the official ActiveLook app for firmware updates.
 
 ## Verification
 
-- Sixteen SwiftPM unit tests, including the user's exact clipped sentence, full-screen bitmap geometry, font-size presets, content preservation, long-word endings and image-size geometry, are covered by `swift test --disable-sandbox`.
-- GitHub Actions runs the unsigned iOS simulator build on macOS, plus a new Ubuntu Swift core-tests job.
+- Twenty SwiftPM unit tests, including the user's exact clipped sentence, full-screen bitmap geometry, font-size presets, content preservation, walking street names, per-turn auto-fit, long-word endings and image-size geometry, are covered by `swift test --disable-sandbox`.
+- GitHub Actions runs the unsigned iOS simulator build on macOS, Swift core tests on Ubuntu, and Node tests for the secure Cloudflare relay.
 - An early simulator build caught two UIKit property collisions with the word 'next'; they were fixed and later simulator builds passed.
 - Unit tests cover line wrapping, long words, pagination, unsupported-character handling, Hindi and Telugu romanization, countdown formatting, black-and-white dithering and JSON card serialization.
 
-**Hardware-dependent tests are still required.** The shared text renderer now queues and coalesces 1-bit bitmap frames to avoid overlapping incomplete BLE transfers, but real transport confirmation requires ENGO 3.  Sending a BLE command or queuing an image is not proof it appeared in the optics. ENGO 3 firmware-specific settings, actual transfer completion, photo orientation, ASR language availability and the appearance of all HUD elements cannot be verified without the physical device. Begin photo testing with the built-in high-contrast test pattern at Large, then compare each selectable size. The Full preset fills nearly the whole microdisplay but may be clipped by the optical field of view.
+**Hardware-dependent tests are still required.** The user has confirmed text and photos; maps and the relay have not been physically/end-to-end tested.  The shared text renderer now queues and coalesces 1-bit bitmap frames to avoid overlapping incomplete BLE transfers, but real transport confirmation requires ENGO 3.  Sending a BLE command or queuing an image is not proof it appeared in the optics. ENGO 3 firmware-specific settings, actual transfer completion, photo orientation, ASR language availability and the appearance of all HUD elements cannot be verified without the physical device. Begin photo testing with the built-in high-contrast test pattern at Large, then compare each selectable size. The Full preset fills nearly the whole microdisplay but may be clipped by the optical field of view.
 
 ## Install on the existing Mac project
 
