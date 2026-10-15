@@ -4,6 +4,13 @@
 <dict>
 	<key>NSBluetoothAlwaysUsageDescription</key>
 	<string>Connect to your ENGO 3 smart glasses.</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Connect to the free local AI model running on your Mac while you are on a trusted Wi-Fi network.</string>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
 	<key>NSCameraUsageDescription</key>
 	<string>Take photos to recognize printed text locally on your iPhone and display it through ENGO 3.</string>
 	<key>NSMicrophoneUsageDescription</key>
