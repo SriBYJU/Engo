@@ -14,13 +14,13 @@ class LocalModelBridgeTests(unittest.TestCase):
 
         def fake_ollama(path, payload, timeout):
             if path == "/api/tags":
-                return {"models": [{"name": "qwen2.5:3b"}]}
+                return {"models": [{"name": "qwen3:4b-instruct"}]}
             if path == "/api/chat":
                 cls.requests.append(payload)
                 return {"message": {"content": "Hello, this is a local answer."}}
             raise AssertionError(f"Unexpected Ollama request {path}")
 
-        cls.server = OpenLensBridge(("127.0.0.1", 0), "a" * 48, "qwen2.5:3b",
+        cls.server = OpenLensBridge(("127.0.0.1", 0), "a" * 48, "qwen3:4b-instruct",
                                     transport=fake_ollama)
         cls.port = cls.server.server_address[1]
         cls.thread = threading.Thread(target=cls.server.serve_forever, daemon=True)
@@ -66,7 +66,7 @@ class LocalModelBridgeTests(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertEqual(payload["text"], "Hello, this is a local answer.")
         recent = self.requests[-1]
-        self.assertEqual(recent["model"], "qwen2.5:3b")
+        self.assertEqual(recent["model"], "qwen3:4b-instruct")
         self.assertEqual(recent["stream"], False)
         self.assertEqual(recent["messages"][1]["content"], "What is photosynthesis?")
         self.assertIn("Explain", recent["messages"][0]["content"])
