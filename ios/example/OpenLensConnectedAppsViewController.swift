@@ -39,6 +39,13 @@ final class OpenLensConnectedAppsViewController: UIViewController, CNContactPick
             icon: "checklist") { [weak self] in self?.openAgenda(.reminders) })
         content.addArrangedSubview(reminderStatus)
 
+        content.addArrangedSubview(LensUI.section("Incoming message alerts",
+            detail: "Opt in to receive selected iMessage or other app notifications via Apple's Shortcuts automations. Sender only by default; no blanket inbox access."))
+        content.addArrangedSubview(LensUI.button("Message Alerts  ·  Shortcuts",
+            icon: "bell.badge.fill") { [weak self] in
+                guard let self = self else { return }
+                self.open(OpenLensMessageAlertsViewController(self.glasses))
+            })
         content.addArrangedSubview(LensUI.section("Messages, WhatsApp, Mail and Notes",
             detail: "iOS does not let OpenLens automatically read chats or inbox notifications. Copy or paste only the text you choose."))
         content.addArrangedSubview(LensUI.button("Shared Clips  ·  Paste from any app",
