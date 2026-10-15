@@ -193,6 +193,12 @@ final class OpenLensHomeViewController: UIViewController {
                 self?.hud(2)
             }
         ))
+        content.addArrangedSubview(LensUI.section("Connected Apps", detail: "Your calendar, reminders, chosen contacts and text copied from Messages or other apps."))
+        content.addArrangedSubview(LensUI.button("Connected Apps  ·  Calendar, Reminders, Messages",
+            icon: "square.stack.3d.up.fill") { [weak self] in
+                guard let self = self else { return }
+                self.open(OpenLensConnectedAppsViewController(self.glasses))
+            })
         content.addArrangedSubview(LensUI.section("Everyday tools", detail: "Useful even without an AI subscription."))
         content.addArrangedSubview(LensUI.pair(
             LensUI.tile("Quick cards", subtitle: "Saved reminders", symbol: "rectangle.stack.fill") { [weak self] in
