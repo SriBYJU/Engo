@@ -175,6 +175,41 @@ final class OpenLensTextTests: XCTestCase {
         XCTAssertEqual(OpenLensText.bestFittingSize(direction, preferred: .small), .small)
     }
 
+    func testAIProviderRequiresExplicitCloudSelection() {
+        XCTAssertEqual(OpenLensAIProvider(rawValue: 0), .automatic)
+        XCTAssertEqual(OpenLensAIProvider(rawValue: 1), .iphone)
+        XCTAssertEqual(OpenLensAIProvider(rawValue: 2), .localMac)
+        XCTAssertEqual(OpenLensAIProvider(rawValue: 3), .cloudRelay)
+        XCTAssertEqual(OpenLensAIProvider.allCases.map(\.title),
+                       ["Auto", "iPhone", "Mac", "Cloud"])
+    }
+
+    func testAllAIActionPromptsAreDistinctAndDoNotPromiseCameraOrInternet() {
+        XCTAssertEqual(OpenLensAIPrompt.tasks.count, 5)
+        let generated = OpenLensAIPrompt.tasks.map {
+            OpenLensAIPrompt.instructions(mode: "ai", task: $0)
+        }
+        XCTAssertEqual(Set(generated).count, 5)
+        for content in generated {
+            XCTAssertTrue(content.contains("smart-glasses"))
+            XCTAssertTrue(content.contains("do not invent recent facts"))
+            XCTAssertFalse(content.contains("API key"))
+        }
+        XCTAssertFalse(OpenLensAIPrompt.isValid(task: "unsafe"))
+        XCTAssertTrue(OpenLensAIPrompt.isValid(task: "summarize"))
+    }
+
+    func testOfflineTranslationPromptsExplicitlyPreserveProperNouns() {
+        for (code, language) in OpenLensAIPrompt.translationLanguages {
+            let instruction = OpenLensAIPrompt.instructions(mode: "translate",
+                                                           task: "general",
+                                                           targetLanguage: code)
+            XCTAssertTrue(instruction.contains(language))
+            XCTAssertTrue(instruction.contains("addresses"))
+            XCTAssertTrue(instruction.contains("street names"))
+        }
+    }
+
     func testCardsJSONRoundTrip() throws {
         let card = OpenLensCard(title: "Meeting", body: "Remember the intro")
         let payload = try JSONEncoder().encode([card])
