@@ -182,14 +182,14 @@ final class OpenLensHomeViewController: UIViewController {
         content.addArrangedSubview(LensUI.section("AI & speech", detail: "Ask questions, dictate, translate, or read text from photos."))
         content.addArrangedSubview(LensUI.pair(
             LensUI.tile("Captions", subtitle: "Live speech text", symbol: "waveform") { [weak self] in self?.hud(1) },
-            LensUI.tile("Ask AI", subtitle: "Relay required", symbol: "sparkles") { [weak self] in self?.hud(2) }
+            LensUI.tile("Ask AI", subtitle: "Free iPhone or Mac AI", symbol: "sparkles") { [weak self] in self?.hud(2) }
         ))
         content.addArrangedSubview(LensUI.pair(
             LensUI.tile("Read text", subtitle: "Camera & on-device OCR", symbol: "text.viewfinder") { [weak self] in
                 guard let self = self else { return }
                 self.open(OpenLensReadTextViewController(self.glasses))
             },
-            LensUI.tile("Translate", subtitle: "Via your private AI relay", symbol: "globe") { [weak self] in
+            LensUI.tile("Translate", subtitle: "Offline AI supported", symbol: "globe") { [weak self] in
                 self?.hud(2)
             }
         ))
@@ -226,7 +226,7 @@ final class OpenLensHomeViewController: UIViewController {
         content.addArrangedSubview(LensUI.button("Advanced developer tools", icon: "wrench.and.screwdriver") { [weak self] in
             guard let self = self else { return }; self.open(CommandsMenuTableViewController(self.glasses))
         })
-        content.addArrangedSubview(LensUI.label("Some controls require ENGO 3 firmware support. Open Diagnostics to see device-reported values. AI needs a separate authenticated relay.", size: 12, color: LensUI.muted))
+        content.addArrangedSubview(LensUI.label("AI runs on supported iPhones with Apple Intelligence, or through free Ollama on your Mac. Cloud is optional and never chosen automatically. Device controls depend on firmware support.", size: 12, color: LensUI.muted))
         updateBattery()
     }
 
