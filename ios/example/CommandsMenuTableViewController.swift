@@ -184,6 +184,9 @@ final class OpenLensHUDViewController: UIViewController, CLLocationManagerDelega
     private let relaySetup = UIButton(type: .system)
     private let relayCheck = UIButton(type: .system)
     private let relayExplanation = UILabel()
+    private let providerChoice = UISegmentedControl(items: OpenLensAIProvider.allCases.map(\.title))
+    private let providerNote = UILabel()
+    private var onDeviceAITask: Task<Void, Never>?
     private let aiTaskButton = UIButton(type: .system)
     private let translateButton = UIButton(type: .system)
     private let fullResponse = UITextView()
@@ -428,6 +431,12 @@ final class OpenLensHUDViewController: UIViewController, CLLocationManagerDelega
         pagesButton.titleLabel?.font = .systemFont(ofSize: 15, weight: .semibold)
         pagesButton.addTarget(self, action: #selector(openPages), for: .touchUpInside)
         pagesButton.isHidden = true
+        providerChoice.selectedSegmentIndex = OpenLensAIProvider.selected.rawValue
+        providerChoice.selectedSegmentTintColor = accent
+        providerChoice.addTarget(self, action: #selector(providerChanged), for: .valueChanged)
+        providerNote.textColor = .lightGray
+        providerNote.font = .systemFont(ofSize: 13)
+        providerNote.numberOfLines = 0
         relaySetup.configuration = .borderedProminent()
         relaySetup.configuration?.title = "Set up AI"
         relaySetup.addTarget(self, action: #selector(setupRelayPressed), for: .touchUpInside)
@@ -437,7 +446,7 @@ final class OpenLensHUDViewController: UIViewController, CLLocationManagerDelega
         relayExplanation.numberOfLines = 0
         relayExplanation.textColor = .lightGray
         relayExplanation.font = .systemFont(ofSize: 13)
-        relayExplanation.text = "Connect a private Cloudflare relay before AI or translation can work."
+        relayExplanation.text = "OpenLens prefers free local AI. Cloud is optional and never used automatically."
         setupAIUtilities()
         setupCaptionUtilities()
         let sizeTitle = UILabel()
@@ -450,7 +459,7 @@ final class OpenLensHUDViewController: UIViewController, CLLocationManagerDelega
         relayRow.spacing = 10
         let stack = UIStackView(arrangedSubviews: [
             heading, title, subtitle, segment, inputLabel, field,
-            aiUtilities, sizeTitle, fontSelector, fontDetail, send, mic,
+            aiUtilities, providerChoice, providerNote, sizeTitle, fontSelector, fontDetail, send, mic,
             captionsUtilities, relayExplanation, relayRow,
             fullResponse, resultUtilities, preview, pageCounter, pager,
             pagesButton, status
@@ -458,6 +467,8 @@ final class OpenLensHUDViewController: UIViewController, CLLocationManagerDelega
         relaySetup.isHidden = true
         relayCheck.isHidden = true
         relayExplanation.isHidden = true
+        providerChoice.isHidden = true
+        providerNote.isHidden = true
         stack.axis = .vertical
         stack.spacing = 17
         stack.translatesAutoresizingMaskIntoConstraints = false
@@ -497,6 +508,8 @@ final class OpenLensHUDViewController: UIViewController, CLLocationManagerDelega
         relayRequestID += 1
         relayTask?.cancel()
         relayTask = nil
+        onDeviceAITask?.cancel()
+        onDeviceAITask = nil
         send.isEnabled = true
     }
 
@@ -513,6 +526,8 @@ final class OpenLensHUDViewController: UIViewController, CLLocationManagerDelega
         relaySetup.isHidden = i != 2
         relayCheck.isHidden = i != 2
         relayExplanation.isHidden = i != 2
+        providerChoice.isHidden = i != 2
+        providerNote.isHidden = i != 2
         fullResponse.isHidden = i != 2 || latestAIResponse.isEmpty
         resultUtilities.isHidden = i != 2 || latestAIResponse.isEmpty
         if i == 2 {
@@ -524,17 +539,68 @@ final class OpenLensHUDViewController: UIViewController, CLLocationManagerDelega
         relayRequestID += 1
         relayTask?.cancel()
         relayTask = nil
+        onDeviceAITask?.cancel()
+        onDeviceAITask = nil
         send.isEnabled = true
         if i == 2 {
-            let saved = UserDefaults.standard.string(forKey: "openlens.relay") ?? ""
-            relayExplanation.text = saved.isEmpty
-                ? "AI needs a one-time private relay setup. Tap Set up AI."
-                : "Relay URL saved. Tap Test AI connection before asking your first question."
+            updateAIProviderUI()
         }
         status.text = i == 1 ? "Start listening to show live captions." :
-            i == 2 ? (UserDefaults.standard.string(forKey: "openlens.relay") == nil
-                ? "AI is not configured yet. Tap Set up AI." : "AI configured locally. Check the connection.")
-            : "Type text to send to the glasses."
+            i == 2 ? providerNote.text :
+            "Type text to send to the glasses."
+    }
+
+    @objc private func providerChanged() {
+        guard let selected = OpenLensAIProvider(rawValue: providerChoice.selectedSegmentIndex) else { return }
+        OpenLensAIProvider.selected = selected
+        relayRequestID += 1
+        relayTask?.cancel()
+        relayTask = nil
+        onDeviceAITask?.cancel()
+        onDeviceAITask = nil
+        send.isEnabled = true
+        updateAIProviderUI()
+        status.text = providerNote.text
+    }
+
+    private func effectiveAIProvider() -> OpenLensAIProvider {
+        let preference = OpenLensAIProvider.selected
+        if preference == .automatic {
+            return OpenLensOnDeviceAI.isReady ? .iphone : .localMac
+        }
+        return preference
+    }
+
+    private func updateAIProviderUI() {
+        providerChoice.selectedSegmentIndex = OpenLensAIProvider.selected.rawValue
+        let chosen = effectiveAIProvider()
+        switch chosen {
+        case .iphone:
+            relaySetup.isHidden = true
+            relayCheck.isHidden = false
+            relayCheck.configuration?.title = "Check iPhone AI"
+            providerNote.text = OpenLensOnDeviceAI.availabilityMessage
+            relayExplanation.text = "Free on-device generation. No Mac, account, API key or cloud request."
+        case .localMac:
+            relaySetup.isHidden = false
+            relayCheck.isHidden = false
+            relaySetup.configuration?.title = "Pair local Mac"
+            relayCheck.configuration?.title = "Test local Mac"
+            let macReady = localMacURL() != nil && loadRelayToken(account: "local-mac-token") != nil
+            providerNote.text = macReady
+                ? "Local Mac paired. Turn on Ollama and keep your iPhone on the same trusted Wi-Fi."
+                : "No on-device AI available yet. Pair free Ollama running on your MacBook Air."
+            relayExplanation.text = "All model inference runs on your Mac. Mac and phone must share a trusted Wi-Fi; it is not an internet service."
+        case .cloudRelay:
+            relaySetup.isHidden = false
+            relayCheck.isHidden = false
+            relaySetup.configuration?.title = "Set up cloud relay"
+            relayCheck.configuration?.title = "Test cloud relay"
+            providerNote.text = "Cloud is explicitly selected; it may require paid credentials."
+            relayExplanation.text = "Optional legacy Cloudflare/OpenAI relay. Automatic mode never selects cloud."
+        case .automatic:
+            break
+        }
     }
 
     private func updateFontDetail() {
