@@ -263,3 +263,32 @@ public enum OpenLensAIPrompt {
         }
     }
 }
+
+
+/// User-selected text from Messages, Mail, Notes, Safari, etc. OpenLens never
+/// reads another app's inbox automatically; a clip is explicitly pasted/saved.
+public struct OpenLensSharedClip: Codable, Identifiable, Equatable {
+    public let id: UUID
+    public let source: String
+    public let body: String
+    public let createdAt: Date
+
+    public static let maxCharacters = 4000
+    public static let maxSavedItems = 30
+    public static let sourceChoices = ["Messages", "WhatsApp", "Mail", "Notes", "Safari", "Other"]
+
+    public init?(source: String, text: String, id: UUID = UUID(),
+                 createdAt: Date = Date()) {
+        let cleanText = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleanText.isEmpty else { return nil }
+        self.id = id
+        self.source = Self.sourceChoices.contains(source) ? source : "Other"
+        self.body = String(cleanText.prefix(Self.maxCharacters))
+        self.createdAt = createdAt
+    }
+
+    /// Bound saved data even when imported from an existing locally stored file.
+    public static func limited(_ items: [Self]) -> [Self] {
+        Array(items.sorted(by: { $0.createdAt > $1.createdAt }).prefix(maxSavedItems))
+    }
+}
