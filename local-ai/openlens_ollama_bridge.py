@@ -20,7 +20,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
-DEFAULT_MODEL = "qwen2.5:3b"
+DEFAULT_MODEL = "qwen3:4b-instruct"
 OLLAMA_BASE = "http://127.0.0.1:11434"
 TOKEN_FILE = Path.home() / ".openlens" / "local-ai-token"
 MAX_BODY = 8192
