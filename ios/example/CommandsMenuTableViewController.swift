@@ -783,7 +783,83 @@ final class OpenLensHUDViewController: UIViewController, CLLocationManagerDelega
         return url
     }
 
-    @objc private func setupRelayPressed() { configureRelay() }
+    @objc private func setupRelayPressed() {
+        switch effectiveAIProvider() {
+        case .localMac: configureLocalMac()
+        case .cloudRelay: configureRelay()
+        case .iphone: status.text = OpenLensOnDeviceAI.availabilityMessage
+        case .automatic: configureLocalMac()
+        }
+    }
+
+    /// Accept only private LAN IP addresses or mDNS hosts; never send the
+    /// local pairing token to a public/internet HTTP endpoint.
+    private func localMacURL() -> URL? {
+        guard let raw = UserDefaults.standard.string(forKey: "openlens.localMacURL"),
+              let url = URL(string: raw.trimmingCharacters(in: .whitespacesAndNewlines)),
+              url.scheme?.lowercased() == "http", let host = url.host,
+              url.user == nil, url.password == nil,
+              url.path == "/openlens", url.port != nil,
+              Self.isPrivateLANHost(host) else { return nil }
+        return url
+    }
+
+    private static func isPrivateLANHost(_ host: String) -> Bool {
+        if host.lowercased().hasSuffix(".local") { return true }
+        let pieces = host.split(separator: ".")
+        guard pieces.count == 4 else { return false }
+        let bytes = pieces.compactMap { Int($0) }
+        guard bytes.count == 4, bytes.allSatisfy({ $0 >= 0 && $0 <= 255 }) else { return false }
+        return bytes[0] == 10 ||
+               (bytes[0] == 192 && bytes[1] == 168) ||
+               (bytes[0] == 172 && (16...31).contains(bytes[1])) ||
+               (bytes[0] == 169 && bytes[1] == 254)
+    }
+
+    private func configureLocalMac() {
+        let alert = UIAlertController(title: "Free AI on your Mac",
+            message: "Run Ollama and OpenLens's local bridge on your MacBook Air. " +
+                     "Enter its private Wi-Fi address and local pairing token. " +
+                     "The Mac must remain on. Use only trusted home Wi-Fi: LAN HTTP is not encrypted.",
+            preferredStyle: .alert)
+        alert.addTextField { field in
+            field.placeholder = "http://192.168.1.25:8765/openlens"
+            field.text = UserDefaults.standard.string(forKey: "openlens.localMacURL")
+            field.keyboardType = .URL
+            field.autocapitalizationType = .none
+            field.autocorrectionType = .no
+        }
+        alert.addTextField { field in
+            field.placeholder = "Local pairing token from Mac Terminal"
+            field.text = self.loadRelayToken(account: "local-mac-token")
+            field.isSecureTextEntry = true
+            field.autocapitalizationType = .none
+            field.autocorrectionType = .no
+        }
+        alert.addAction(UIAlertAction(title: "Save pairing", style: .default) { [weak self] _ in
+            guard let self = self else { return }
+            let entered = alert.textFields?.first?.text?
+                .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            UserDefaults.standard.set(entered, forKey: "openlens.localMacURL")
+            guard self.localMacURL() != nil else {
+                self.status.text = "Use the Mac's private IP or .local address, port, " +
+                    "and /openlens path. For example http://192.168.1.25:8765/openlens"
+                self.updateAIProviderUI()
+                return
+            }
+            let token = alert.textFields?.last?.text?
+                .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            guard token.count >= 32 else {
+                self.status.text = "Use the full pairing token (32+ characters) shown on the Mac."
+                return
+            }
+            self.saveRelayToken(token, account: "local-mac-token")
+            self.updateAIProviderUI()
+            self.status.text = "Local Mac paired. Tap Test local Mac to confirm Ollama is ready."
+        })
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        present(alert, animated: true)
+    }
 
     @objc private func testRelayConnection() {
         guard let endpoint = relayURL(), let token = loadRelayToken(), !token.isEmpty else {
@@ -961,11 +1037,11 @@ final class OpenLensHUDViewController: UIViewController, CLLocationManagerDelega
         callRelay(mode: "translate", text: text, targetLanguage: translationLanguage)
     }
 
-    private func saveRelayToken(_ token: String) {
+    private func saveRelayToken(_ token: String, account: String = "relay-token") {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: "OpenLens-ENGO3",
-            kSecAttrAccount as String: "relay-token"
+            kSecAttrAccount as String: account
         ]
         SecItemDelete(query as CFDictionary)
         if !token.isEmpty, let data = token.data(using: .utf8) {
@@ -975,11 +1051,11 @@ final class OpenLensHUDViewController: UIViewController, CLLocationManagerDelega
         }
     }
 
-    private func loadRelayToken() -> String? {
+    private func loadRelayToken(account: String = "relay-token") -> String? {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: "OpenLens-ENGO3",
-            kSecAttrAccount as String: "relay-token",
+            kSecAttrAccount as String: account,
             kSecMatchLimit as String: kSecMatchLimitOne,
             kSecReturnData as String: true
         ]
