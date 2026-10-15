@@ -17,6 +17,16 @@
 	<string>Use the iPhone microphone only when you start captions or speech input.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>Transcribe speech when you choose live captions.</string>
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>With your permission, display your upcoming iPhone calendar events on your ENGO 3 glasses. OpenLens never changes events.</string>
+	<key>NSCalendarsUsageDescription</key>
+	<string>Show your calendar's upcoming events on your ENGO 3 after you connect it.</string>
+	<key>NSRemindersFullAccessUsageDescription</key>
+	<string>With your permission, read incomplete iPhone reminders to display them on your ENGO 3. OpenLens does not modify tasks.</string>
+	<key>NSRemindersUsageDescription</key>
+	<string>Show your existing incomplete iPhone reminders on your ENGO 3 glasses.</string>
+	<key>NSContactsUsageDescription</key>
+	<string>Select a contact to display its name and chosen details on ENGO 3 without importing your entire address book.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Find walking routes from your current position when requested.</string>
 	<key>UIUserInterfaceStyle</key>
