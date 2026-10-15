@@ -36,15 +36,15 @@ awake, running Ollama, and on the same network as your iPhone.
 ### Mac setup
 
 1. Install Ollama from https://ollama.com/download/mac and open it.
-2. In the Mac Terminal, download the 3B Qwen model once:
+2. In the Mac Terminal, download the 3B Qwen 3 instruction model once:
 
    ```bash
-   ollama pull qwen2.5:3b
+   ollama pull qwen3:4b-instruct
    ```
 
    This downloads model weights; after that, ordinary inference is local.
-   About a few gigabytes of disk space and several gigabytes of available
-   memory may be needed. 3B models are faster but less capable than large
+   The Qwen3 4B-instruct weights are approximately 2.5 GB. A few gigabytes of disk space and several gigabytes of available
+   memory may be needed. 4B local models are smaller and usually less capable than large
    cloud models, and translations might be imperfect.
 
 3. Start the **OpenLens Mac bridge**. Keep this Terminal window open:
@@ -110,12 +110,12 @@ may need to allow this connection.
   Wi-Fi; keep Ollama and the Python bridge running, check the Mac Wi-Fi IP,
   and allow OpenLens access in iOS Settings → Privacy & Security → Local Network.
 - **Mac health responds but configured is false:** Run
-  `ollama pull qwen2.5:3b`, then recheck; ensure Ollama itself is running.
+  `ollama pull qwen3:4b-instruct`, then recheck; ensure Ollama itself is running.
 - **Wrong token:** Copy the full token from the Mac Terminal. Stop the
   bridge before rotating the token file.
 - **Slow responses:** Smaller models are usually quicker; try
-  `ollama pull qwen2.5:1.5b` and start the bridge with
-  `--model qwen2.5:1.5b` (this may reduce quality).
+  `ollama pull qwen3:1.7b` and start the bridge with
+  `--model qwen3:1.7b` (this may reduce quality).
 - **App says local connection blocked:** Only local private IPv4 addresses
   or a `.local` Mac hostname are accepted. The endpoint must end in
   `/openlens`.
