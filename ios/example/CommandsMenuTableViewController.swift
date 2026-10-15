@@ -910,7 +910,7 @@ final class OpenLensHUDViewController: UIViewController, CLLocationManagerDelega
                             : "Cloud relay reports ready. Ask a question to check API access."
                     } else {
                         self.status.text = provider == .localMac
-                            ? "Local bridge is online, but the Ollama model is missing. Run ollama pull qwen2.5:3b on the Mac."
+                            ? "Local bridge is online, but the Ollama model is missing. Run ollama pull qwen3:4b-instruct on the Mac."
                             : "Cloud relay is online but no AI model/API credentials are configured."
                     }
                 } else if code == 401 {
