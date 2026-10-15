@@ -210,6 +210,52 @@ final class OpenLensTextTests: XCTestCase {
         }
     }
 
+    func testSharedClipRejectsEmptyTextAndWhitespace() {
+        XCTAssertNil(OpenLensSharedClip(source: "Messages", text: "  \n \t "))
+        XCTAssertNil(OpenLensSharedClip(source: "WhatsApp", text: ""))
+    }
+    func testSharedClipKeepsMessageContentWithoutAlteration() {
+        let text = "Hey, meet on Broad Street at 6:15!\nDon't forget the address."
+        let clip = OpenLensSharedClip(source: "Messages", text: text)
+        XCTAssertNotNil(clip)
+        XCTAssertEqual(clip?.source, "Messages")
+        XCTAssertEqual(clip?.body, text)
+        XCTAssertTrue(clip?.body.contains("Broad Street") ?? false)
+    }
+    func testSharedClipUnknownAppCannotSpoofSupportedSource() {
+        let clip = OpenLensSharedClip(source: "Untrusted App", text: "Hello")
+        XCTAssertEqual(clip?.source, "Other")
+        XCTAssertEqual(OpenLensSharedClip.sourceChoices,
+                       ["Messages", "WhatsApp", "Mail", "Notes", "Safari", "Other"])
+    }
+    func testSharedClipBoundsSavedContentSizeWithoutAffectingOriginalPaste() {
+        let long = String(repeating: "a", count: 5000) + "THE END"
+        let clip = OpenLensSharedClip(source: "Notes", text: long)
+        XCTAssertEqual(clip?.body.count, OpenLensSharedClip.maxCharacters)
+        XCTAssertEqual(long.count, 5007)
+        XCTAssertEqual(clip?.body.last, "a")
+    }
+    func testSharedClipRoundTripsUnicodeLocally() throws {
+        let clip = try XCTUnwrap(OpenLensSharedClip(
+            source: "WhatsApp", text: "Hello नमस्ते తెలుగు 😃 / https://example.com"))
+        let bytes = try JSONEncoder().encode(clip)
+        let restored = try JSONDecoder().decode(OpenLensSharedClip.self, from: bytes)
+        XCTAssertEqual(clip, restored)
+        XCTAssertEqual(restored.body, "Hello नमस्ते తెలుగు 😃 / https://example.com")
+    }
+    func testSharedClipStorageCapsItemsAndOrdersNewestFirst() {
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        let clips = (0..<45).compactMap { idx in
+            OpenLensSharedClip(source: "Other", text: "Item \(idx)",
+                               createdAt: now.addingTimeInterval(Double(idx)))
+        }
+        let bounded = OpenLensSharedClip.limited(clips)
+        XCTAssertEqual(bounded.count, OpenLensSharedClip.maxSavedItems)
+        XCTAssertEqual(bounded.first?.body, "Item 44")
+        XCTAssertEqual(bounded.last?.body, "Item 15")
+        XCTAssertEqual(bounded.count, Set(bounded.map { $0.id }).count)
+    }
+
     func testCardsJSONRoundTrip() throws {
         let card = OpenLensCard(title: "Meeting", body: "Remember the intro")
         let payload = try JSONEncoder().encode([card])
