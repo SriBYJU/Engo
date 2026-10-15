@@ -256,6 +256,47 @@ final class OpenLensTextTests: XCTestCase {
         XCTAssertEqual(bounded.count, Set(bounded.map { $0.id }).count)
     }
 
+    func testIncomingMessageAlertsDefaultToSenderOnly() throws {
+        let item = try XCTUnwrap(OpenLensIncomingMessage(
+            sender: " Alex ", source: "Messages", body: "private message",
+            retainBody: false))
+        XCTAssertEqual(item.glassesText, "Messages: Alex")
+        XCTAssertTrue(item.body.isEmpty)
+        XCTAssertFalse(item.glassesText.contains("private"))
+    }
+    func testIncomingMessageAlertsRevealContentOnlyWithOptIn() throws {
+        let item = try XCTUnwrap(OpenLensIncomingMessage(
+            sender: " Alex ", source: "WhatsApp", body: "Meet at Broad Street",
+            retainBody: true))
+        XCTAssertEqual(item.glassesText, "WhatsApp: Alex\nMeet at Broad Street")
+        XCTAssertTrue(item.glassesText.hasSuffix("Broad Street"))
+    }
+    func testIncomingMessageAlertRejectsMissingSender() {
+        XCTAssertNil(OpenLensIncomingMessage(sender: " ", source: "Messages",
+                                            body: "A secret", retainBody: true))
+    }
+    func testIncomingMessageAlertBoundsSenderMessageAndSource() throws {
+        let source = String(repeating: "S", count: 100)
+        let sender = String(repeating: "A", count: 200)
+        let body = String(repeating: "B", count: 900)
+        let item = try XCTUnwrap(OpenLensIncomingMessage(
+            sender: sender, source: source, body: body, retainBody: true))
+        XCTAssertEqual(item.source.count, 40)
+        XCTAssertEqual(item.sender.count, 80)
+        XCTAssertEqual(item.body.count, OpenLensIncomingMessage.maxBodyCharacters)
+    }
+    func testIncomingMessageAlertHistoryHasStrictLimits() {
+        let alerts = (0..<40).compactMap { idx in
+            OpenLensIncomingMessage(sender: "Sender \(idx)", source: "Messages",
+                body: "", retainBody: false,
+                createdAt: Date(timeIntervalSince1970: TimeInterval(1_000_000 + idx)))
+        }
+        let recent = OpenLensIncomingMessage.recent(alerts)
+        XCTAssertEqual(recent.count, OpenLensIncomingMessage.maxStored)
+        XCTAssertEqual(recent.first?.sender, "Sender 39")
+        XCTAssertEqual(recent.last?.sender, "Sender 28")
+    }
+
     func testCardsJSONRoundTrip() throws {
         let card = OpenLensCard(title: "Meeting", body: "Remember the intro")
         let payload = try JSONEncoder().encode([card])
