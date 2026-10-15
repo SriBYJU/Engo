@@ -44,13 +44,29 @@ or flash firmware from this test app.
 9. Turn automatic brightness off, adjust manual brightness, then **Refresh actual settings**. Confirm the device reports the new values.
 10. Toggle gesture detection and refresh. Verify readback or record firmware incompatibility.
 11. Test live captions after granting microphone and speech permissions. Try Start/Stop, copy, clear, switch language, and permission denial. Confirm the app does not leave an active mic after leaving the screen or a failed audio session.
-12. Open **Ask AI**. Before relay deployment, the app must explain how to set it up, not pretend to answer. Try each task action (Answer, Explain, Summarize, Rewrite, Brainstorm) after deployment. Validate the complete answer, Previous/Next pages, Copy, and Save as Quick Card. Test the visible Translate action as well. Deploy the private Cloudflare Worker using `cloudflare/openlens-relay/README.md`. Enter its HTTPS `/openlens` endpoint plus the separate client token using **Set up AI**, and tap **Test AI connection**. Only after it reports `configured: true`, ask a simple question and confirm a complete paginated answer. Test translation and expected errors (unauthorized token, unreachable server, rate limit). Never put the provider API key in the app.
+12. Open **Ask AI** with **Auto**. Confirm it reports on-device Apple AI availability. If unavailable, pair the local Mac running Ollama (see `local-ai/README.md`), test health, then ask each task action (Answer, Explain, Summarize, Rewrite, Brainstorm). Validate a complete answer, Previous/Next pages, Copy, Save as Quick Card, and Translate. Verify AI works with internet disconnected but Wi-Fi still connected for Mac mode. Cloud must be explicitly selected; no automatic cloud requests. Deploy the private Cloudflare Worker using `cloudflare/openlens-relay/README.md`. Enter its HTTPS `/openlens` endpoint plus the separate client token using **Set up AI**, and tap **Test AI connection**. Only after it reports `configured: true`, ask a simple question and confirm a complete paginated answer. Test translation and expected errors (unauthorized token, unreachable server, rate limit). Never put the provider API key in the app.
 13. Test walking while stationary: search an unambiguous destination (for example a complete street address), choose **Directions text**, and ensure the street name appears in full. The app auto-fits short turns; for longer ones tap **Next page**, not **Next turn**. Switch to **Street map** and verify an actual MapKit route with highlighted path, current-position dot and North marker appears in both the phone preview and ENGO 3. Compare **Next turn** with **Whole route** scopes. The optional location-follow switch updates the map dot about every 20 seconds while the screen is open. Verify Apple Maps handoff for actual live navigation. This is *not* spatially anchored AR or automatic turn recognition. Do not operate the phone while moving or crossing streets.
 14. Test **Read Text**: select a clear photo with a paragraph and street names. Verify Apple's Vision recognizes the text locally. Correct a word in the editor and tap **Show all text on glasses**. Check every page in Presenter. Test Copy and Save as Quick Card, then test Camera permissions and an empty/no-text image.
 15. Test **Focus and clock**: start a 5-minute timer, confirm the iPhone counts every second while ENGO 3 updates roughly every ten seconds, pause/resume, reset. Enable the live clock and wait a full minute for a single new frame; verify updates stop when leaving the screen.
 16. Test navigation back, reconnect, and disconnect. Record any device or UI failures.
 
-## AI setup
+## Free local AI setup (recommended)
+
+Run OpenLens with **AI → Auto**. It uses Apple's Foundation Models on an eligible iPhone
+with iOS 26+ and downloaded Apple Intelligence models, free and offline.
+If Apple AI is unavailable, run Ollama on the user's M1 MacBook Air using the
+steps in `local-ai/README.md`: download model once, start the local Python
+bridge, select Mac in OpenLens, pair with the local URL and Mac-generated token,
+and tap Test local Mac. The Mac must stay awake on the same trusted network.
+The Mac bridge communicates over unencrypted HTTP with a bearer token: do
+not expose it to public Wi-Fi or the internet. No OpenAI credentials needed.
+
+**Test both routes where available:** iPhone AI health, local Mac health,
+simple answer, summarize, translation, long HUD paging, saving results.
+Auto must never make a Cloud call. Apple AI hardware support and language
+availability must be verified on the real iPhone.
+
+## Optional cloud AI setup
 
 The AI Worker is **source code only until you deploy it**. Read `cloudflare/openlens-relay/README.md`, deploy it with a separate strong client bearer token, set OPENAI_API_KEY using Cloudflare secrets (not in Xcode), and provide the HTTPS endpoint ending in `/openlens` to OpenLens. After deployment, the **Test AI connection** button checks server configuration without paying for a model request. The Node automated tests stub upstream responses and cannot verify your production credentials or quota.
 
