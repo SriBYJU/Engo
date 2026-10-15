@@ -70,6 +70,22 @@ availability must be verified on the real iPhone.
 
 The AI Worker is **source code only until you deploy it**. Read `cloudflare/openlens-relay/README.md`, deploy it with a separate strong client bearer token, set OPENAI_API_KEY using Cloudflare secrets (not in Xcode), and provide the HTTPS endpoint ending in `/openlens` to OpenLens. After deployment, the **Test AI connection** button checks server configuration without paying for a model request. The Node automated tests stub upstream responses and cannot verify your production credentials or quota.
 
+## Connected Apps
+
+Open **Connected Apps** from the home dashboard. Test Apple Calendar events
+for the next seven days with explicit full-access permission on iOS 17+ and
+iOS 15–16; selecting an event should show the complete title/date/location
+on the glasses without changing the calendar. Repeat for incomplete Reminders,
+including undated and long tasks, confirming none are modified. Test choosing
+one contact with the system picker and displaying only the selected contact.
+
+For Messages, WhatsApp, Gmail, Notes, Mail and Safari, explicitly **Copy**
+a message or text selection, open **Shared Clips**, tap **Paste clipboard**, and
+display it via the existing Presenter. Test multiline/long text, save/delete
+and Delete All. OpenLens can't automatically read arbitrary chat histories or
+app notifications; never claim it does. No clipboard monitoring runs in the
+background. See `docs/OPENLENS_CONNECTED_APPS.md` for details.
+
 ## Important limitations
 - GitHub Actions performs an unsigned macOS iOS-simulator build, Swift HUD unit tests and Node Cloudflare-relay tests. The user has confirmed text and photo display after earlier fixes. Physical ENGO 3 testing is still necessary for the new MapKit mini-map and navigation controls.
 - Sending BLE commands or receiving SDK callbacks does not prove a frame appeared on the display. Report visual confirmation separately. MapKit snapshots also require connectivity to Apple map-tile services.
