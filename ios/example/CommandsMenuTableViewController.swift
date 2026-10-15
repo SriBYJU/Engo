@@ -861,89 +861,156 @@ final class OpenLensHUDViewController: UIViewController, CLLocationManagerDelega
         present(alert, animated: true)
     }
 
+    private func endpoint(for provider: OpenLensAIProvider) -> (url: URL, token: String)? {
+        switch provider {
+        case .localMac:
+            guard let url = localMacURL(),
+                  let token = loadRelayToken(account: "local-mac-token"),
+                  token.count >= 32 else { return nil }
+            return (url, token)
+        case .cloudRelay:
+            guard let url = relayURL(),
+                  let token = loadRelayToken(), !token.isEmpty else { return nil }
+            return (url, token)
+        default: return nil
+        }
+    }
+
     @objc private func testRelayConnection() {
-        guard let endpoint = relayURL(), let token = loadRelayToken(), !token.isEmpty else {
-            status.text = "Add an HTTPS relay URL and its private client token first."
-            configureRelay()
+        let provider = effectiveAIProvider()
+        if provider == .iphone {
+            status.text = OpenLensOnDeviceAI.availabilityMessage
+            return
+        }
+        guard let connection = endpoint(for: provider) else {
+            status.text = provider == .localMac
+                ? "Pair your Mac with its private Wi-Fi URL and token first."
+                : "Set up the optional cloud relay first."
+            setupRelayPressed()
             return
         }
         relayRequestID += 1
-        let requestID = relayRequestID
+        let id = relayRequestID
         relayTask?.cancel()
-        let url = endpoint.appendingPathComponent("health")
-        var request = URLRequest(url: url)
-        request.setValue("Bearer " + token, forHTTPHeaderField: "Authorization")
+        let healthURL = connection.url.appendingPathComponent("health")
+        var request = URLRequest(url: healthURL)
+        request.setValue("Bearer " + connection.token, forHTTPHeaderField: "Authorization")
         request.timeoutInterval = 12
-        status.text = "Checking private AI relay…"
+        status.text = provider == .localMac ? "Checking Ollama on your Mac…" : "Checking cloud relay…"
         relayTask = URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
             let code = (response as? HTTPURLResponse)?.statusCode ?? 0
-            let payload = data.flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }
+            let result = data.flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }
             DispatchQueue.main.async {
-                guard let self = self, self.relayRequestID == requestID else { return }
-                if (200..<300).contains(code), payload?["status"] as? String == "ok" {
-                    let ready = payload?["configured"] as? Bool ?? false
-                    self.status.text = ready
-                        ? "Relay URL is reachable and reports configured. Send a short AI question to verify the model."
-                        : "Relay is online, but server AI credentials or model are missing."
+                guard let self = self, self.relayRequestID == id else { return }
+                if (200..<300).contains(code), result?["status"] as? String == "ok" {
+                    let ready = result?["configured"] as? Bool ?? false
+                    if ready {
+                        self.status.text = provider == .localMac
+                            ? "Local Mac AI is ready. Ask a question to test the model."
+                            : "Cloud relay reports ready. Ask a question to check API access."
+                    } else {
+                        self.status.text = provider == .localMac
+                            ? "Local bridge is online, but the Ollama model is missing. Run ollama pull qwen2.5:3b on the Mac."
+                            : "Cloud relay is online but no AI model/API credentials are configured."
+                    }
                 } else if code == 401 {
-                    self.status.text = "Relay rejected the client token. Check the token in Set up AI."
+                    self.status.text = "Wrong pairing token. Open the setup screen and check it."
                 } else {
-                    self.status.text = error?.localizedDescription ??
-                        "AI health check failed (HTTP \(code)). Confirm URL and deployment."
+                    let issue = error?.localizedDescription ??
+                        "The AI service could not be reached (HTTP \(code))."
+                    self.status.text = issue + (provider == .localMac
+                        ? " Check the Mac is awake, the bridge is running, both devices share Wi-Fi, and Local Network is allowed in iOS Settings."
+                        : " Check your cloud configuration.")
                 }
             }
         }
         relayTask?.resume()
     }
 
+    private func displayAIAnswer(_ value: String, mode: String, source: String) {
+        latestAIResponse = value
+        fullResponse.text = value
+        fullResponse.isHidden = false
+        resultUtilities.isHidden = false
+        draw(mode == "translate" ? "OPENLENS / TRANSLATE" : "OPENLENS / AI", value)
+        relayExplanation.text = "\(source) answer ready. Scroll the complete answer on your iPhone or use Next on the glasses."
+    }
+
+    /// Automatic means local-only: Apple iPhone AI first, then the paired Mac.
+    /// Cloud is used exclusively when the user deliberately selects Cloud.
     private func callRelay(mode: String, text: String, targetLanguage: String) {
-        guard let url = relayURL(), let token = loadRelayToken(), !token.isEmpty else {
-            status.text = "AI is not connected. Tap Set up AI and then Test AI connection."
-            return
-        }
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { status.text = "Type or dictate a question first."; return }
+        guard !trimmed.isEmpty else { status.text = "Type or dictate something first."; return }
         guard trimmed.count <= 3000 else {
-            status.text = "This is too long for the AI relay. Use up to 3,000 characters."
+            status.text = "Use 3,000 characters or fewer per question."
             return
         }
+        let provider = effectiveAIProvider()
         relayRequestID += 1
-        let requestID = relayRequestID
+        let id = relayRequestID
         relayTask?.cancel()
-        var request = URLRequest(url: url)
+        relayTask = nil
+        onDeviceAITask?.cancel()
+        onDeviceAITask = nil
+        if provider == .iphone {
+            guard OpenLensOnDeviceAI.isReady else {
+                status.text = OpenLensOnDeviceAI.availabilityMessage
+                return
+            }
+            status.text = mode == "translate"
+                ? "Translating privately on your iPhone…"
+                : "Thinking privately on your iPhone…"
+            send.isEnabled = false
+            onDeviceAITask = OpenLensOnDeviceAI.generate(
+                mode: mode, task: aiTask, text: trimmed,
+                targetLanguage: targetLanguage
+            ) { [weak self] result in
+                guard let self = self, self.relayRequestID == id else { return }
+                self.send.isEnabled = true
+                switch result {
+                case .success(let answer):
+                    self.displayAIAnswer(answer, mode: mode, source: "On-device")
+                case .failure(let error):
+                    self.status.text = "iPhone AI: \(error.localizedDescription)"
+                }
+            }
+            return
+        }
+        guard let connection = endpoint(for: provider) else {
+            status.text = provider == .localMac
+                ? "Local AI needs your Mac. Tap Pair local Mac to connect Ollama. No OpenAI key is needed."
+                : "Set up the optional cloud relay first."
+            return
+        }
+        var request = URLRequest(url: connection.url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("Bearer " + token, forHTTPHeaderField: "Authorization")
+        request.setValue("Bearer " + connection.token, forHTTPHeaderField: "Authorization")
         request.httpBody = try? JSONSerialization.data(withJSONObject: [
             "mode": mode, "text": trimmed, "target_language": targetLanguage,
             "task": aiTask
         ])
-        request.timeoutInterval = 35
-        status.text = mode == "translate" ? "Translating…" : "Asking AI…"
+        request.timeoutInterval = provider == .localMac ? 135 : 35
+        status.text = provider == .localMac ? "Mac is running local AI…" : "Asking cloud AI…"
         send.isEnabled = false
         relayTask = URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
             let code = (response as? HTTPURLResponse)?.statusCode ?? 0
-            let json = data.flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }
+            let result = data.flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }
             DispatchQueue.main.async {
-                guard let self = self, self.relayRequestID == requestID else { return }
+                guard let self = self, self.relayRequestID == id else { return }
                 self.send.isEnabled = true
-                if (200..<300).contains(code), let raw = json?["text"] as? String,
-                   !raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    // Use the existing paged bitmap renderer to keep all answer text.
-                    self.latestAIResponse = raw
-                    self.fullResponse.text = raw
-                    self.fullResponse.isHidden = false
-                    self.resultUtilities.isHidden = false
-                    self.draw(mode == "translate" ? "OPENLENS / TRANSLATE" : "OPENLENS / AI", raw)
-                    self.relayExplanation.text = "Answer ready. Scroll the full response on your iPhone or use Next to read all pages on ENGO 3."
+                if (200..<300).contains(code), let answer = result?["text"] as? String,
+                   !answer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    self.displayAIAnswer(answer, mode: mode,
+                                         source: provider == .localMac ? "Local Mac" : "Cloud")
                 } else {
-                    let detail = (json?["error"] as? String) ?? error?.localizedDescription
+                    let detail = (result?["error"] as? String) ?? error?.localizedDescription
                     if code == 401 {
-                        self.status.text = "Invalid relay token. Open Set up AI to correct it."
+                        self.status.text = "Invalid local pairing token. Tap Pair local Mac and check it."
                     } else if code == 429 {
-                        self.status.text = "AI rate limit or quota reached. Wait and retry."
+                        self.status.text = "The model is busy or rate-limited. Wait and retry."
                     } else {
-                        self.status.text = detail ?? "AI request failed (HTTP \(code)). Test the connection first."
+                        self.status.text = detail ?? "AI request failed (HTTP \(code)). Tap Test AI connection."
                     }
                 }
             }
