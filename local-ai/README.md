@@ -38,9 +38,9 @@ awake, running Ollama, and on the same network as your iPhone.
 1. Install Ollama from https://ollama.com/download/mac and open it.
 2. In the Mac Terminal, download the 3B Qwen model once:
 
-   \`\`\`bash
+   ```bash
    ollama pull qwen2.5:3b
-   \`\`\`
+   ```
 
    This downloads model weights; after that, ordinary inference is local.
    About a few gigabytes of disk space and several gigabytes of available
@@ -49,31 +49,31 @@ awake, running Ollama, and on the same network as your iPhone.
 
 3. Start the **OpenLens Mac bridge**. Keep this Terminal window open:
 
-   \`\`\`bash
+   ```bash
    cd ~/Documents/Engo/local-ai
    python3 openlens_ollama_bridge.py --host 0.0.0.0
-   \`\`\`
+   ```
 
    The bridge uses only the Python standard library (Python 3.10 or newer
-   recommended); it does not need \`pip install\` or an OpenAI account.
+   recommended); it does not need `pip install` or an OpenAI account.
 
 4. The Terminal displays a **local pairing token**. This is **not** an API
    key. Copy the token for your iPhone. OpenLens saves it separately in
    iPhone Keychain. The token also lives in
-   \`~/.openlens/local-ai-token\` on your Mac with file permissions 0600.
+   `~/.openlens/local-ai-token` on your Mac with file permissions 0600.
    Never put it in GitHub or share screenshots that show it.
 
 5. In another Terminal window, find your Mac Wi-Fi address:
 
-   \`\`\`bash
+   ```bash
    ipconfig getifaddr en0
-   \`\`\`
+   ```
 
-   For example, if it prints \`192.168.1.25\`, the phone endpoint is:
+   For example, if it prints `192.168.1.25`, the phone endpoint is:
 
-   \`\`\`text
+   ```text
    http://192.168.1.25:8765/openlens
-   \`\`\`
+   ```
 
 6. On the iPhone, open **OpenLens → Ask AI → Mac** (or Auto when iPhone
    AI is not supported), then tap **Pair local Mac**. Paste the endpoint
@@ -95,7 +95,7 @@ server to the internet. For stronger privacy when out of the house, use the
 Apple on-device model if your iPhone supports it, or do not use remote AI.
 If possible, use WPA2/WPA3 Wi-Fi and turn the server off when finished.
 
-The bridge reaches Ollama only at \`127.0.0.1:11434\` on your Mac.
+The bridge reaches Ollama only at `127.0.0.1:11434` on your Mac.
 It does **not** forward text to the internet. It does not store prompts,
 messages, or chat history. The iPhone talks to the Mac only after you
 tap a local AI feature. Mac Firewall or iPhone Local Network permissions
@@ -110,15 +110,15 @@ may need to allow this connection.
   Wi-Fi; keep Ollama and the Python bridge running, check the Mac Wi-Fi IP,
   and allow OpenLens access in iOS Settings → Privacy & Security → Local Network.
 - **Mac health responds but configured is false:** Run
-  \`ollama pull qwen2.5:3b\`, then recheck; ensure Ollama itself is running.
+  `ollama pull qwen2.5:3b`, then recheck; ensure Ollama itself is running.
 - **Wrong token:** Copy the full token from the Mac Terminal. Stop the
   bridge before rotating the token file.
 - **Slow responses:** Smaller models are usually quicker; try
-  \`ollama pull qwen2.5:1.5b\` and start the bridge with
-  \`--model qwen2.5:1.5b\` (this may reduce quality).
+  `ollama pull qwen2.5:1.5b` and start the bridge with
+  `--model qwen2.5:1.5b` (this may reduce quality).
 - **App says local connection blocked:** Only local private IPv4 addresses
-  or a \`.local\` Mac hostname are accepted. The endpoint must end in
-  \`/openlens\`.
+  or a `.local` Mac hostname are accepted. The endpoint must end in
+  `/openlens`.
 - **On the go without Mac:** Use Apple AI on a supported iPhone.
   Otherwise, you can still use the app's non-AI features.
 
@@ -132,10 +132,10 @@ address and token stay the same.
 
 Run on a Mac:
 
-\`\`\`bash
+```bash
 cd ~/Documents/Engo
 python3 -m unittest discover -s local-ai -p 'test_*.py' -v
-\`\`\`
+```
 
 The tests use a **mock Ollama response**; they verify authentication,
 health requests, AI task forwarding, translations and input validation
