@@ -1061,7 +1061,7 @@ final class OpenLensHUDViewController: UIViewController, CLLocationManagerDelega
     }
 
     @objc private func settings() {
-        let menu = UIAlertController(title: "OpenLens Settings", message: "Choose iPhone speech language or set AI relay.", preferredStyle: .actionSheet)
+        let menu = UIAlertController(title: "OpenLens Settings", message: "Choose speech language and free local AI options.", preferredStyle: .actionSheet)
         for (name, code) in [("English", "en-US"), ("Spanish", "es-ES"), ("French", "fr-FR"), ("Hindi", "hi-IN"), ("Telugu", "te-IN")] {
             menu.addAction(UIAlertAction(title: "Speech: " + name, style: .default) { _ in
                 self.stopSpeech(submit: false)
@@ -1075,6 +1075,11 @@ final class OpenLensHUDViewController: UIViewController, CLLocationManagerDelega
         }
         menu.addAction(UIAlertAction(title: "Translate current transcript", style: .default) { _ in self.translateCurrentText() })
         menu.addAction(UIAlertAction(title: "Translation target language", style: .default) { _ in self.chooseTranslationLanguage() })
+        menu.addAction(UIAlertAction(title: "Pair free AI on my Mac", style: .default) { _ in
+            OpenLensAIProvider.selected = .localMac
+            self.updateAIProviderUI()
+            self.configureLocalMac()
+        })
         menu.addAction(UIAlertAction(title: "Set HTTPS AI relay", style: .default) { _ in self.configureRelay() })
         menu.addAction(UIAlertAction(title: "Test AI connection", style: .default) { _ in self.testRelayConnection() })
         menu.addAction(UIAlertAction(title: "Cancel", style: .cancel))
