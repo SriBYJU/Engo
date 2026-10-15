@@ -292,3 +292,38 @@ public struct OpenLensSharedClip: Codable, Identifiable, Equatable {
         Array(items.sorted(by: { $0.createdAt > $1.createdAt }).prefix(maxSavedItems))
     }
 }
+
+
+/// Alerts arrive only from a user-created iOS Shortcuts automation using the
+/// OpenLens App Intent. This never reads the Messages/WhatsApp databases.
+public struct OpenLensIncomingMessage: Codable, Identifiable, Equatable {
+    public let id: UUID
+    public let sender: String
+    public let source: String
+    public let body: String
+    public let createdAt: Date
+
+    public static let maxStored = 12
+    public static let maxBodyCharacters = 600
+
+    public init?(sender: String, source: String, body: String,
+                 retainBody: Bool, createdAt: Date = Date(), id: UUID = UUID()) {
+        let cleanSender = sender.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleanSender.isEmpty else { return nil }
+        self.id = id
+        self.sender = String(cleanSender.prefix(80))
+        let cleanedSource = source.trimmingCharacters(in: .whitespacesAndNewlines)
+        self.source = String((cleanedSource.isEmpty ? "Message" : cleanedSource).prefix(40))
+        self.body = retainBody ? String(body.trimmingCharacters(in: .whitespacesAndNewlines)
+                                    .prefix(Self.maxBodyCharacters)) : ""
+        self.createdAt = createdAt
+    }
+
+    public var glassesText: String {
+        let header = "\(source): \(sender)"
+        return body.isEmpty ? header : header + "\n" + body
+    }
+    public static func recent(_ alerts: [Self]) -> [Self] {
+        Array(alerts.sorted { $0.createdAt > $1.createdAt }.prefix(maxStored))
+    }
+}
