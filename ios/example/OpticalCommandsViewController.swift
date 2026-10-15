@@ -43,7 +43,7 @@ class OpticalCommandsViewController : CommandsTableViewController {
             self.enableGestureSensor,
             self.disableGestureSensor,
             self.enableBrightnessSensor,
-            self.disableGestureSensor,
+            self.disableBrightnessSensor,
             self.subscribeToSensorInterfaceNotifications,
             self.unsubscribeFromSensorInterfaceNotifications
         ]

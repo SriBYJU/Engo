@@ -95,7 +95,7 @@ class GraphicsCommandsViewController : CommandsTableViewController {
     
     func drawText() {
         glasses.clear()
-        glasses.txt(x: 102, y: 128, rotation: .bottomRL, font: 2, color: 15, string: "Hello")
+        glasses.txt(x: 102, y: 128, rotation: OpenLensOrientation.rotation, font: 2, color: 15, string: "Hello")
     }
     
     func setColorBlack() {

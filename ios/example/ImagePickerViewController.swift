@@ -65,24 +65,24 @@ class ImagePickerViewController: UIViewController, UIImagePickerControllerDelega
                 glasses.cfgSet(name: "DemoApp")
                 glasses.imgSave(id: 1, image: image, imgSaveFmt: ImgSaveFmt.MONO_4BPP)
                 glasses.imgDisplay(id: 1, x: 0, y: 0)
-                glasses.imgDelete(id: 1)
+                // Keep the image while the asynchronous BLE display command executes.
                 break
             case "imageSave4bppHeatshrink":
                 glasses.cfgWrite(name: "DemoApp", version: 1, password: 42)
                 glasses.cfgSet(name: "DemoApp")
                 glasses.imgSave(id: 1, image: image, imgSaveFmt: ImgSaveFmt.MONO_4BPP_HEATSHRINK)
                 glasses.imgDisplay(id: 1, x: 0, y: 0)
-                glasses.imgDelete(id: 1)
+                // Keep the image while the asynchronous BLE display command executes.
                 break
             case "imageSave1bpp":
                 glasses.cfgWrite(name: "DemoApp", version: 1, password: 42)
                 glasses.cfgSet(name: "DemoApp")
                 glasses.imgSave(id: 0, image: image, imgSaveFmt: ImgSaveFmt.MONO_1BPP)
                 glasses.imgDisplay(id: 0, x: 0, y: 0)
-                glasses.imgDelete(id: 0)
+                // Keep the image while the asynchronous BLE display command executes.
                 break
             case "imageStream1bpp":
-                glasses.imgStream(image: image, x: 0, y: 0, imgStreamFmt: ImgStreamFmt.MONO_1BPP)
+                glasses.imgStream1bpp(image: image, x: 0, y: 0)
                 break
             case "imageStream4bppHeatshrink":
                 glasses.imgStream(image: image, x: 0, y: 0, imgStreamFmt: ImgStreamFmt.MONO_4BPP_HEATSHRINK)

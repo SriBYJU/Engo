@@ -30,6 +30,7 @@ class ImageCommandsViewController : CommandsTableViewController {
         title = "Image commands"
         
         commandNames = [
+            "Display photo (OpenLens recommended)",
             "List images",
             "Display image 1",
             "Display image 2",
@@ -47,6 +48,7 @@ class ImageCommandsViewController : CommandsTableViewController {
         ]
 
         commandActions = [
+            self.openReliableImageViewer,
             self.listImages,
             self.displayImage1,
             self.displayImage2,
@@ -65,6 +67,10 @@ class ImageCommandsViewController : CommandsTableViewController {
     }
     
     
+    private func openReliableImageViewer() {
+        navigationController?.pushViewController(OpenLensImageViewController(glasses), animated: true)
+    }
+
     // MARK: - Actions
     
     func listImages() {

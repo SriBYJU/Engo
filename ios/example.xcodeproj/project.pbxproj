@@ -34,6 +34,14 @@
 		B5D05B1A2C216BA700A8E6C3 /* AnimationCommandsViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5D05B192C216BA700A8E6C3 /* AnimationCommandsViewController.swift */; };
 		B5D7C5792948D15000F55A70 /* ImagePicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5D7C5762948D15000F55A70 /* ImagePicker.swift */; };
 		B5D7C57A2948D15000F55A70 /* ImagePickerViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5D7C5772948D15000F55A70 /* ImagePickerViewController.swift */; };
+		A1B2C3D4E5F60718293A4B5D /* OpenLensExperience.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B5C /* OpenLensExperience.swift */; };
+		A1B2C3D4E5F60718293A4B5F /* OpenLensText.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B5E /* OpenLensText.swift */; };
+		A1B2C3D4E5F60718293A4B61 /* OpenLensEverydayTools.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B60 /* OpenLensEverydayTools.swift */; };
+		A1B2C3D4E5F60718293A4B63 /* OpenLensMapRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B62 /* OpenLensMapRenderer.swift */; };
+		A1B2C3D4E5F60718293A4B65 /* OpenLensReadTextViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B64 /* OpenLensReadTextViewController.swift */; };
+		A1B2C3D4E5F60718293A4B67 /* OpenLensLocalAI.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B66 /* OpenLensLocalAI.swift */; };
+		A1B2C3D4E5F60718293A4B69 /* OpenLensConnectedAppsViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B68 /* OpenLensConnectedAppsViewController.swift */; };
+		A1B2C3D4E5F60718293A4B6B /* OpenLensIncomingAlerts.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B6A /* OpenLensIncomingAlerts.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -68,6 +76,14 @@
 		B5D05B192C216BA700A8E6C3 /* AnimationCommandsViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnimationCommandsViewController.swift; sourceTree = "<group>"; };
 		B5D7C5762948D15000F55A70 /* ImagePicker.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ImagePicker.swift; sourceTree = "<group>"; };
 		B5D7C5772948D15000F55A70 /* ImagePickerViewController.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ImagePickerViewController.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F60718293A4B5C /* OpenLensExperience.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenLensExperience.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F60718293A4B5E /* OpenLensText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenLensText.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F60718293A4B60 /* OpenLensEverydayTools.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenLensEverydayTools.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F60718293A4B62 /* OpenLensMapRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenLensMapRenderer.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F60718293A4B64 /* OpenLensReadTextViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenLensReadTextViewController.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F60718293A4B66 /* OpenLensLocalAI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenLensLocalAI.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F60718293A4B68 /* OpenLensConnectedAppsViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenLensConnectedAppsViewController.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F60718293A4B6A /* OpenLensIncomingAlerts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenLensIncomingAlerts.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -107,6 +123,14 @@
 				23923B7C274D646600C441AA /* Assets */,
 				2307D96E27329CBA000732DC /* Assets.xcassets */,
 				2307D9852732C1CB000732DC /* CommandsMenuTableViewController.swift */,
+                A1B2C3D4E5F60718293A4B5C /* OpenLensExperience.swift */,
+                A1B2C3D4E5F60718293A4B60 /* OpenLensEverydayTools.swift */,
+                A1B2C3D4E5F60718293A4B62 /* OpenLensMapRenderer.swift */,
+                A1B2C3D4E5F60718293A4B64 /* OpenLensReadTextViewController.swift */,
+                A1B2C3D4E5F60718293A4B66 /* OpenLensLocalAI.swift */,
+                A1B2C3D4E5F60718293A4B68 /* OpenLensConnectedAppsViewController.swift */,
+                A1B2C3D4E5F60718293A4B6A /* OpenLensIncomingAlerts.swift */,
+                A1B2C3D4E5F60718293A4B5E /* OpenLensText.swift */,
 				2307D97C2732C1CB000732DC /* CommandsTableViewController.swift */,
 				2307D9842732C1CB000732DC /* ConfigurationCommandsViewController.swift */,
 				2307D9872732C1CB000732DC /* DisplayCommandsViewController.swift */,
@@ -238,9 +262,13 @@
 			inputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-example/Pods-example-frameworks-${CONFIGURATION}-input-files.xcfilelist",
 			);
-			name = "[CP] Embed Pods Frameworks";
+			inputPaths = (
+            );
+            name = "[CP] Embed Pods Frameworks";
 			outputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-example/Pods-example-frameworks-${CONFIGURATION}-output-files.xcfilelist",
+			);
+			outputPaths = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
@@ -296,6 +324,14 @@
 				B5696C4E29813A1700F3B72A /* ViewerCommandsViewController.swift in Sources */,
 				2307D98B2732C1CB000732DC /* CommandsTableViewController.swift in Sources */,
 				2307D9942732C1CB000732DC /* CommandsMenuTableViewController.swift in Sources */,
+                A1B2C3D4E5F60718293A4B5D /* OpenLensExperience.swift in Sources */,
+                A1B2C3D4E5F60718293A4B61 /* OpenLensEverydayTools.swift in Sources */,
+                A1B2C3D4E5F60718293A4B63 /* OpenLensMapRenderer.swift in Sources */,
+                A1B2C3D4E5F60718293A4B65 /* OpenLensReadTextViewController.swift in Sources */,
+                A1B2C3D4E5F60718293A4B67 /* OpenLensLocalAI.swift in Sources */,
+                A1B2C3D4E5F60718293A4B69 /* OpenLensConnectedAppsViewController.swift in Sources */,
+                A1B2C3D4E5F60718293A4B6B /* OpenLensIncomingAlerts.swift in Sources */,
+                A1B2C3D4E5F60718293A4B5F /* OpenLensText.swift in Sources */,
 				2307D98C2732C1CB000732DC /* StatisticsCommandsViewController.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -446,11 +482,15 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 54U8KC82CU;
+				DEVELOPMENT_TEAM = RHRSWA2M4Z;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = example/Info.plist;
-				INFOPLIST_KEY_LSApplicationCategoryType = "";
-				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "Need bluetooth to connect to ActiveLook glasses";
+				INFOPLIST_KEY_CFBundleDisplayName = OpenLens;
+                INFOPLIST_KEY_LSApplicationCategoryType = "";
+				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "Connect to ENGO smart glasses.";
+                INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Calculate walking route instructions for your smart glasses.";
+                INFOPLIST_KEY_NSMicrophoneUsageDescription = "Listen only when you start OpenLens captions or an AI question.";
+                INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Transcribe speech from the iPhone microphone for OpenLens captions.";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
 				INFOPLIST_KEY_UIMainStoryboardFile = Main;
@@ -461,7 +501,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.microoled.exampleAL;
+				PRODUCT_BUNDLE_IDENTIFIER = com.sri.openlensdemo;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
@@ -477,11 +517,15 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 54U8KC82CU;
+				DEVELOPMENT_TEAM = RHRSWA2M4Z;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = example/Info.plist;
-				INFOPLIST_KEY_LSApplicationCategoryType = "";
-				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "Need bluetooth to connect to ActiveLook glasses";
+				INFOPLIST_KEY_CFBundleDisplayName = OpenLens;
+                INFOPLIST_KEY_LSApplicationCategoryType = "";
+				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "Connect to ENGO smart glasses.";
+                INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Calculate walking route instructions for your smart glasses.";
+                INFOPLIST_KEY_NSMicrophoneUsageDescription = "Listen only when you start OpenLens captions or an AI question.";
+                INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Transcribe speech from the iPhone microphone for OpenLens captions.";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
 				INFOPLIST_KEY_UIMainStoryboardFile = Main;
@@ -492,7 +536,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.microoled.exampleAL;
+				PRODUCT_BUNDLE_IDENTIFIER = com.sri.openlensdemo;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;

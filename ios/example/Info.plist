@@ -2,19 +2,35 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <key>NSBluetoothAlwaysUsageDescription</key>
-    <string>Connect to ENGO smart glasses.</string>
-    <key>NSSpeechRecognitionUsageDescription</key>
-    <string>Transcribe speech from the iPhone microphone for OpenLens captions.</string>
-    <key>NSMicrophoneUsageDescription</key>
-    <string>Listen only when you start OpenLens captions or an AI question.</string>
-    <key>NSLocationWhenInUseUsageDescription</key>
-    <string>Calculate walking route instructions for your smart glasses.</string>
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>Connect to your ENGO 3 smart glasses.</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Connect to the free local AI model running on your Mac while you are on a trusted Wi-Fi network.</string>
 	<key>NSAppTransportSecurity</key>
 	<dict>
-		<key>NSAllowsArbitraryLoads</key>
+		<key>NSAllowsLocalNetworking</key>
 		<true/>
 	</dict>
+	<key>NSCameraUsageDescription</key>
+	<string>Take photos to recognize printed text locally on your iPhone and display it through ENGO 3.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Use the iPhone microphone only when you start captions or speech input.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Transcribe speech when you choose live captions.</string>
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>With your permission, display your upcoming iPhone calendar events on your ENGO 3 glasses. OpenLens never changes events.</string>
+	<key>NSCalendarsUsageDescription</key>
+	<string>Show your calendar's upcoming events on your ENGO 3 after you connect it.</string>
+	<key>NSRemindersFullAccessUsageDescription</key>
+	<string>With your permission, read incomplete iPhone reminders to display them on your ENGO 3. OpenLens does not modify tasks.</string>
+	<key>NSRemindersUsageDescription</key>
+	<string>Show your existing incomplete iPhone reminders on your ENGO 3 glasses.</string>
+	<key>NSContactsUsageDescription</key>
+	<string>Select a contact to display its name and chosen details on ENGO 3 without importing your entire address book.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Find walking routes from your current position when requested.</string>
+	<key>UIUserInterfaceStyle</key>
+	<string>Dark</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
@@ -37,7 +53,6 @@
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>bluetooth-central</string>
-		<string>processing</string>
 	</array>
 </dict>
 </plist>

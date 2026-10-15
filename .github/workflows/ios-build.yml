@@ -7,7 +7,44 @@ on:
       - feature/openlens-ios-foundation
   workflow_dispatch:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
+  test-core:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: swift-actions/setup-swift@v2
+        with:
+          swift-version: "5.10"
+      - name: Test HUD formatting, page layout, dithering and saved cards
+        run: swift test --disable-sandbox
+
+  test-relay:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Test private AI relay auth, response parsing and translation
+        run: node --test cloudflare/openlens-relay/worker.test.js
+
+  test-local-ai:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Test local Mac Ollama pairing, health, tasks, translation and input validation
+        run: python3 -m unittest discover -s local-ai -p 'test_*.py' -v
+
   build-ios:
     runs-on: macos-15
     timeout-minutes: 20

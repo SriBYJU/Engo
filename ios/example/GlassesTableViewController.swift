@@ -34,7 +34,9 @@ class GlassesTableViewController: UITableViewController {
                 onUpdateStartCallback: { SdkGlassesUpdate in
                  print("onUpdateStartCallback")
              }, onUpdateAvailableCallback: { (SdkGlassesUpdate, authorize: () -> Void) in
-                 authorize()
+                 // This is an experimental app. NEVER automatically flash a device.
+                 // Firmware maintenance belongs in the official ActiveLook application.
+                 print("Firmware available: use the official ActiveLook app to update.")
              }, onUpdateProgressCallback: { SdkGlassesUpdate in
                  print("onUpdateProgressCallback:",
                     " \(SdkGlassesUpdate.getSourceFirmwareVersion()) -> \(SdkGlassesUpdate.getTargetFirmwareVersion())",
@@ -48,16 +50,45 @@ class GlassesTableViewController: UITableViewController {
 
     private var discoveredGlassesArray: [DiscoveredGlasses] = []
     private var connecting: Bool = false
+    private weak var scanStatus: UILabel?
+    private var scannedThisSession = false
+    private var ignoreNextDisconnect = false
     
     
     // MARK: - Life cycle
     
     override func viewDidDisappear(_ animated: Bool) {
-        activeLook.stopScanning()
+        stopScanning()
         super.viewDidDisappear(animated)
     }
 
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        if !scannedThisSession && !connecting {
+            scannedThisSession = true
+            startScanning()
+        }
+    }
+
     
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        title = "Connect glasses"
+        view.backgroundColor = UIColor(red: 0.045, green: 0.066, blue: 0.075, alpha: 1)
+        navigationController?.navigationBar.prefersLargeTitles = true
+        navigationItem.largeTitleDisplayMode = .always
+        tableView.rowHeight = 66
+        tableView.separatorColor = UIColor(white: 0.23, alpha: 1)
+        let label = UILabel(frame: CGRect(x: 20, y: 0, width: view.bounds.width - 40, height: 120))
+        label.text = "OPENLENS  /  ENGO 3\n\nTurn on your glasses, then tap Scan. Select your ENGO 3 to open the dashboard."
+        label.textColor = .white
+        label.font = .systemFont(ofSize: 15, weight: .medium)
+        label.numberOfLines = 0
+        tableView.tableHeaderView = label
+        scanStatus = label
+        scanNavigationItem.title = "Scan"
+    }
+
     // MARK: - Table view data source
 
     override func numberOfSections(in tableView: UITableView) -> Int {
@@ -71,7 +102,11 @@ class GlassesTableViewController: UITableViewController {
     
     override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         let cell = tableView.dequeueReusableCell(withIdentifier: "GlassesTableViewCell", for: indexPath) as UITableViewCell
-        cell.textLabel?.text = discoveredGlassesArray[indexPath.row].name
+        cell.backgroundColor = UIColor(red: 0.095, green: 0.13, blue: 0.14, alpha: 1)
+        cell.textLabel?.textColor = .white
+        cell.textLabel?.font = .systemFont(ofSize: 16, weight: .semibold)
+        cell.textLabel?.text = "●  " + discoveredGlassesArray[indexPath.row].name
+        cell.accessoryType = .disclosureIndicator
         return cell
     }
     
@@ -90,24 +125,35 @@ class GlassesTableViewController: UITableViewController {
                 
                 self.connecting = false
                 self.connectionTimer?.invalidate()
-                if (glasses.isFirmwareAtLeast(version: "4.0")) {
-                    let viewController = CommandsMenuTableViewController(glasses)
-                    self.navigationController?.pushViewController(viewController, animated: true)
-                } else {
-                    let alert = UIAlertController(title: "Update glasses firmware", message: "The glasses firmware is not up to date.", preferredStyle: .alert)
-                    alert.addAction(UIAlertAction(title: "Ok", style: .default, handler: nil))
-                    self.present(alert, animated: true)
+                // ENGO 3 may fail the legacy demo's string-based firmware check
+                // despite official firmware updates and a working BLE connection.
+                if !glasses.isFirmwareAtLeast(version: "4.0") {
+                    print("OpenLens: legacy firmware comparison failed; connected device permitted")
+                }
+                DispatchQueue.main.async {
+                    self.tableView.deselectRow(at: indexPath, animated: true)
+                    self.navigationController?.pushViewController(
+                        OpenLensHomeViewController(glasses, beforeDisconnect: { [weak self] in
+                            self?.ignoreNextDisconnect = true
+                        }), animated: true)
                 }
             }, onGlassesDisconnected: { [weak self] in
-                guard let self = self else { return }
-                
-                let alert = UIAlertController(title: "Glasses disconnected", message: "Connection to glasses lost", preferredStyle: .alert)
-                alert.addAction(UIAlertAction(title: "OK", style: .default, handler: { (_) in
-                    self.navigationController?.popToRootViewController(animated: true)
-                }))
-                
-                self.navigationController?.present(alert, animated: true)
-                
+                DispatchQueue.main.async {
+                    guard let self = self else { return }
+                    self.connecting = false
+                    self.connectionTimer?.invalidate()
+                    if self.ignoreNextDisconnect {
+                        self.ignoreNextDisconnect = false
+                        return
+                    }
+                    let alert = UIAlertController(title: "Glasses disconnected",
+                                                  message: "Bluetooth connection lost. Scan again to reconnect.",
+                                                  preferredStyle: .alert)
+                    alert.addAction(UIAlertAction(title: "OK", style: .default, handler: { _ in
+                        self.navigationController?.popToRootViewController(animated: true)
+                    }))
+                    self.navigationController?.present(alert, animated: true)
+                }
             }, onConnectionError: { [weak self] (error: Error) in
                 guard let self = self else { return }
                 
@@ -116,7 +162,7 @@ class GlassesTableViewController: UITableViewController {
                 
                 let alert = UIAlertController(title: "Error", message: "Connection to glasses failed: \(error.localizedDescription)", preferredStyle: .alert)
                 alert.addAction(UIAlertAction(title: "OK", style: .default, handler: nil))
-                self.present(alert, animated: true)
+                DispatchQueue.main.async { self.present(alert, animated: true) }
             })
 
         connectionTimer = Timer.scheduledTimer(withTimeInterval: connectionTimeoutDuration, repeats: false, block: { [weak self] (timer) in
@@ -137,6 +183,7 @@ class GlassesTableViewController: UITableViewController {
     // MARK: - Data
     
     private func addDiscoveredGlasses(_ glasses: DiscoveredGlasses) {
+        guard !discoveredGlassesArray.contains(where: { $0.name == glasses.name }) else { return }
         discoveredGlassesArray.append(glasses)
         // TODO: // Use -performBatchUpdates:completion: instead of these methods, which will be deprecated in a future release. (introduced iOS 11)
         tableView.beginUpdates()
@@ -148,17 +195,25 @@ class GlassesTableViewController: UITableViewController {
     // MARK: - Scan
     
     private func startScanning() {
+        scannedThisSession = true
         scanNavigationItem.title = "Stop"
+        scanStatus?.text = "SEARCHING FOR ENGO 3…\n\nKeep glasses powered on and Bluetooth enabled."
 
         self.discoveredGlassesArray = []
         self.tableView.reloadData()
         
         activeLook.startScanning(
             onGlassesDiscovered: { [weak self] (discoveredGlasses: DiscoveredGlasses) in
-                self?.addDiscoveredGlasses(discoveredGlasses)
+                DispatchQueue.main.async { self?.addDiscoveredGlasses(discoveredGlasses) }
 
             }, onScanError: { [weak self] (error: Error) in
-                self?.stopScanning()
+                DispatchQueue.main.async {
+                    guard let self = self else { return }
+                    self.stopScanning()
+                    let warning = UIAlertController(title: "Scan failed", message: error.localizedDescription, preferredStyle: .alert)
+                    warning.addAction(UIAlertAction(title: "OK", style: .default))
+                    self.present(warning, animated: true)
+                }
             }
         )
 
@@ -169,6 +224,7 @@ class GlassesTableViewController: UITableViewController {
     
     private func stopScanning() {
         activeLook.stopScanning()
+        scanStatus?.text = "OPENLENS  /  ENGO 3\n\nSelect your glasses, or tap Scan to search again."
         scanNavigationItem.title = "Scan"
         scanTimer?.invalidate()
     }

@@ -1,0 +1,6 @@
+name = "openlens-relay"
+main = "worker.js"
+compatibility_date = "2026-10-01"
+
+[vars]
+OPENAI_MODEL = "gpt-5.4-mini"

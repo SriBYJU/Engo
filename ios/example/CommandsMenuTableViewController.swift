@@ -24,7 +24,7 @@ class CommandsMenuTableViewController: CommandsTableViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         
-        title = "Commands"
+        title = "Advanced tools"
 
         commandNames = [
             "OpenLens HUD",
@@ -67,15 +67,8 @@ class CommandsMenuTableViewController: CommandsTableViewController {
         }
     }
     
-    override func viewDidDisappear(_ animated: Bool) {
-        
-        // Disconnect glasses when navigating back to list
-        if navigationController?.viewControllers.firstIndex(of: self) == nil {
-            glasses.disconnect()
-        }
-        
-        super.viewDidDisappear(animated)
-    }
+    // The connection is owned by OpenLensHomeViewController. Closing the
+    // nested Advanced Tools menu must NOT disconnect a working ENGO 3.
     
     
     // MARK: - Navigation
@@ -159,34 +152,205 @@ import Security
 
 final class OpenLensHUDViewController: UIViewController, CLLocationManagerDelegate {
     private let glasses: Glasses
+    private let initialMode: Int
     private let locationManager = CLLocationManager()
     private let audioEngine = AVAudioEngine()
     private var recognizer = SFSpeechRecognizer(locale: Locale(identifier: "en-US"))
     private var request: SFSpeechAudioBufferRecognitionRequest?
     private var speechTask: SFSpeechRecognitionTask?
     private var listening = false
+    private var speechTapInstalled = false
     private var transcript = ""
     private var lastUpdate = Date.distantPast
-    private let modes = ["HUD", "CAPTIONS", "AI", "MAPS"]
+    private let modes = ["TEXT", "CAPTIONS", "AI"]
     private var translationLanguage = "en"
-    private let segment = UISegmentedControl(items: ["HUD", "Captions", "AI", "Maps"])
-    private let field = UITextField()
-    private let preview = UILabel()
+    private let segment = UISegmentedControl(items: ["Text", "Captions", "AI"])
+    private let field = UITextView()
+    private let inputLabel = UILabel()
+    private let fontSelector = UISegmentedControl(items: OpenLensTextSize.allCases.map(\.name))
+    private let fontDetail = UILabel()
+    private let pageCounter = UILabel()
+    private let previousButton = UIButton(type: .system)
+    private let nextPageButton = UIButton(type: .system)
+    private var visiblePages: [[String]] = []
+    private var currentPage = 0
+    private let preview = UIImageView()
+    private let pagesButton = UIButton(type: .system)
+    private var fullMessage = ""
+    private var fullHeading = ""
     private let status = UILabel()
     private let mic = UIButton(type: .system)
     private let send = UIButton(type: .system)
+    private let relaySetup = UIButton(type: .system)
+    private let relayCheck = UIButton(type: .system)
+    private let relayExplanation = UILabel()
+    private let providerChoice = UISegmentedControl(items: OpenLensAIProvider.allCases.map(\.title))
+    private let providerNote = UILabel()
+    private var onDeviceAITask: Task<Void, Never>?
+    private let aiTaskButton = UIButton(type: .system)
+    private let translateButton = UIButton(type: .system)
+    private let fullResponse = UITextView()
+    private let copyResponse = UIButton(type: .system)
+    private let saveResponse = UIButton(type: .system)
+    private let clearCaptions = UIButton(type: .system)
+    private let copyCaptions = UIButton(type: .system)
+    private let aiUtilities = UIStackView()
+    private let resultUtilities = UIStackView()
+    private let captionsUtilities = UIStackView()
+    private var aiTask = "general"
+    private var latestAIResponse = ""
+    private var relayRequestID = 0
+    private var relayTask: URLSessionDataTask?
 
-    init(_ glasses: Glasses) {
+    init(_ glasses: Glasses, initialMode: Int = 0) {
         self.glasses = glasses
+        self.initialMode = max(0, min(2, initialMode))
         super.init(nibName: nil, bundle: nil)
     }
     required init?(coder: NSCoder) { fatalError("Use init(glasses)") }
 
+    private func setupAIUtilities() {
+        aiTaskButton.configuration = .bordered()
+        aiTaskButton.configuration?.title = "AI action: Answer a question ▾"
+        aiTaskButton.configuration?.image = UIImage(systemName: "sparkles")
+        aiTaskButton.configuration?.imagePadding = 8
+        aiTaskButton.accessibilityHint = "Choose Answer, Explain, Summarize, Rewrite, or Brainstorm"
+        let tasks: [(label: String, key: String)] = [
+            ("Answer a question", "general"),
+            ("Explain a concept", "explain"),
+            ("Summarize text", "summarize"),
+            ("Rewrite clearly", "rewrite"),
+            ("Brainstorm ideas", "brainstorm")
+        ]
+        aiTaskButton.menu = UIMenu(title: "Choose an AI action", children: tasks.map { task in
+            UIAction(title: task.label) { [weak self] _ in
+                guard let self = self else { return }
+                self.aiTask = task.key
+                self.aiTaskButton.configuration?.title = "AI action: \(task.label) ▾"
+                self.status.text = task.key == "general"
+                    ? "Type a question, then tap Ask AI."
+                    : "Enter the content or topic, then tap \(task.label)."
+                self.send.setTitle(task.key == "general" ? "Ask AI" : task.label, for: .normal)
+            }
+        })
+        aiTaskButton.showsMenuAsPrimaryAction = true
+
+        translateButton.configuration = .bordered()
+        translateButton.configuration?.title = "Translate text…"
+        translateButton.configuration?.image = UIImage(systemName: "globe")
+        translateButton.configuration?.imagePadding = 8
+        translateButton.addTarget(self, action: #selector(translateInput), for: .touchUpInside)
+
+        aiUtilities.axis = .vertical
+        aiUtilities.spacing = 10
+        aiUtilities.addArrangedSubview(aiTaskButton)
+        aiUtilities.addArrangedSubview(translateButton)
+        aiUtilities.isHidden = true
+
+        fullResponse.isEditable = false
+        fullResponse.isSelectable = true
+        fullResponse.textColor = .white
+        fullResponse.backgroundColor = UIColor(white: 0.12, alpha: 1)
+        fullResponse.layer.cornerRadius = 14
+        fullResponse.font = .preferredFont(forTextStyle: .body)
+        fullResponse.textContainerInset = UIEdgeInsets(top: 14, left: 12, bottom: 14, right: 12)
+        fullResponse.heightAnchor.constraint(equalToConstant: 185).isActive = true
+        fullResponse.accessibilityLabel = "Full AI answer"
+        fullResponse.isHidden = true
+
+        copyResponse.configuration = .bordered()
+        copyResponse.configuration?.title = "Copy answer"
+        copyResponse.configuration?.image = UIImage(systemName: "doc.on.doc")
+        copyResponse.addTarget(self, action: #selector(copyAIAnswer), for: .touchUpInside)
+        saveResponse.configuration = .bordered()
+        saveResponse.configuration?.title = "Save as quick card"
+        saveResponse.configuration?.image = UIImage(systemName: "bookmark")
+        saveResponse.addTarget(self, action: #selector(saveAIAnswer), for: .touchUpInside)
+        resultUtilities.axis = .horizontal
+        resultUtilities.spacing = 10
+        resultUtilities.distribution = .fillEqually
+        resultUtilities.addArrangedSubview(copyResponse)
+        resultUtilities.addArrangedSubview(saveResponse)
+        resultUtilities.isHidden = true
+    }
+
+    private func setupCaptionUtilities() {
+        clearCaptions.configuration = .bordered()
+        clearCaptions.configuration?.title = "Clear captions"
+        clearCaptions.addTarget(self, action: #selector(clearCaptionText), for: .touchUpInside)
+        copyCaptions.configuration = .bordered()
+        copyCaptions.configuration?.title = "Copy transcript"
+        copyCaptions.addTarget(self, action: #selector(copyCaptionText), for: .touchUpInside)
+        captionsUtilities.axis = .horizontal
+        captionsUtilities.distribution = .fillEqually
+        captionsUtilities.spacing = 10
+        captionsUtilities.addArrangedSubview(clearCaptions)
+        captionsUtilities.addArrangedSubview(copyCaptions)
+        captionsUtilities.isHidden = true
+    }
+
+    @objc private func copyAIAnswer() {
+        guard !latestAIResponse.isEmpty else { return }
+        UIPasteboard.general.string = latestAIResponse
+        status.text = "Complete answer copied to clipboard."
+    }
+
+    @objc private func saveAIAnswer() {
+        guard !latestAIResponse.isEmpty else { return }
+        let question = field.text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let title = question.isEmpty ? "Saved AI answer" : String(question.prefix(60))
+        var cards = OpenLensCardLibrary.load()
+        cards.insert(OpenLensCard(title: title, body: String(latestAIResponse.prefix(2000))), at: 0)
+        OpenLensCardLibrary.save(cards)
+        status.text = "AI answer saved to Quick cards on this iPhone."
+    }
+
+    @objc private func clearCaptionText() {
+        stopSpeech(submit: false)
+        transcript = ""
+        fullMessage = ""
+        fullHeading = ""
+        field.text = ""
+        visiblePages = []
+        preview.image = OpenLensCanvas.render(lines: ["CAPTIONS CLEARED"])
+        pageCounter.text = "Transcript cleared"
+        OpenLensCanvas.cancelPending()
+        glasses.clear()
+        status.text = "Captions cleared. Tap Start listening to resume."
+    }
+
+    @objc private func copyCaptionText() {
+        let text = transcript.isEmpty ? field.text ?? "" : transcript
+        guard !text.isEmpty else { status.text = "No captions to copy yet."; return }
+        UIPasteboard.general.string = text
+        status.text = "Transcript copied to clipboard."
+    }
+
+    @objc private func translateInput() {
+        let text = field.text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else {
+            status.text = "Type or dictate something before translating."
+            return
+        }
+        let options = UIAlertController(title: "Translate into", message: "Select a language to translate the entered text.", preferredStyle: .actionSheet)
+        for (label, code) in [("English", "en"), ("Spanish", "es"), ("French", "fr"), ("Hindi", "hi"), ("Telugu", "te")] {
+            options.addAction(UIAlertAction(title: label, style: .default) { [weak self] _ in
+                guard let self = self else { return }
+                self.translationLanguage = code
+                self.callRelay(mode: "translate", text: text, targetLanguage: code)
+            })
+        }
+        options.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        options.popoverPresentationController?.sourceView = translateButton
+        options.popoverPresentationController?.sourceRect = translateButton.bounds
+        present(options, animated: true)
+    }
+
     override func viewDidLoad() {
         super.viewDidLoad()
-        title = "OpenLens"
+        title = "Text & AI"
         view.backgroundColor = UIColor(red: 0.045, green: 0.072, blue: 0.06, alpha: 1)
-        navigationItem.rightBarButtonItem = UIBarButtonItem(title: "Settings", style: .plain, target: self, action: #selector(settings))
+        navigationItem.rightBarButtonItem = UIBarButtonItem(title: "Options", style: .plain, target: self, action: #selector(settings))
         locationManager.delegate = self
         let accent = UIColor(red: 0.44, green: 0.96, blue: 0.63, alpha: 1)
         let heading = UILabel()
@@ -201,16 +365,20 @@ final class OpenLensHUDViewController: UIViewController, CLLocationManagerDelega
         subtitle.text = "Type or speak on iPhone; the result appears in your glasses."
         subtitle.textColor = .lightGray
         subtitle.numberOfLines = 0
-        segment.selectedSegmentIndex = 0
+        segment.selectedSegmentIndex = initialMode
         segment.selectedSegmentTintColor = accent
         segment.addTarget(self, action: #selector(modeChanged), for: .valueChanged)
-        field.placeholder = "Your message"
+        inputLabel.text = "Type your message"
+        inputLabel.textColor = .lightGray
+        inputLabel.font = .systemFont(ofSize: 14, weight: .medium)
+        field.accessibilityLabel = "Message to display"
+        field.font = .systemFont(ofSize: 17)
+        field.autocorrectionType = .yes
+        field.textContainerInset = UIEdgeInsets(top: 14, left: 11, bottom: 14, right: 11)
         field.backgroundColor = UIColor(white: 0.17, alpha: 1)
         field.textColor = .white
         field.layer.cornerRadius = 10
-        field.heightAnchor.constraint(equalToConstant: 48).isActive = true
-        field.leftView = UIView(frame: CGRect(x: 0, y: 0, width: 12, height: 1))
-        field.leftViewMode = .always
+        field.heightAnchor.constraint(equalToConstant: 126).isActive = true
         field.autocapitalizationType = .sentences
         send.setTitle("Show on glasses", for: .normal)
         mic.setTitle("Start listening", for: .normal)
@@ -223,19 +391,84 @@ final class OpenLensHUDViewController: UIViewController, CLLocationManagerDelega
         }
         send.addTarget(self, action: #selector(sendPressed), for: .touchUpInside)
         mic.addTarget(self, action: #selector(micPressed), for: .touchUpInside)
-        preview.numberOfLines = 0
-        preview.textAlignment = .center
-        preview.textColor = accent
-        preview.font = .monospacedSystemFont(ofSize: 14, weight: .medium)
-        preview.backgroundColor = UIColor(red: 0.07, green: 0.15, blue: 0.10, alpha: 1)
+        // Show the actual bitmap being sent, not an unrelated text preview.
+        preview.contentMode = .scaleAspectFit
+        preview.backgroundColor = .black
         preview.layer.cornerRadius = 12
         preview.layer.masksToBounds = true
-        preview.heightAnchor.constraint(greaterThanOrEqualToConstant: 150).isActive = true
+        preview.heightAnchor.constraint(equalToConstant: 226).isActive = true
+        preview.accessibilityLabel = "Preview of the exact text image sent to the glasses"
         status.text = "Connected via official ActiveLook SDK."
         status.numberOfLines = 0
         status.textColor = .lightGray
         status.font = .systemFont(ofSize: 12)
-        let stack = UIStackView(arrangedSubviews: [heading, title, subtitle, segment, field, send, mic, preview, status])
+        fontSelector.selectedSegmentTintColor = accent
+        fontSelector.selectedSegmentIndex = OpenLensTextSize.selected.rawValue
+        fontSelector.addTarget(self, action: #selector(fontChanged), for: .valueChanged)
+        fontDetail.textColor = .lightGray
+        fontDetail.font = .systemFont(ofSize: 13)
+        fontDetail.numberOfLines = 0
+        updateFontDetail()
+
+        previousButton.configuration = .filled()
+        previousButton.configuration?.title = "◀ Previous"
+        nextPageButton.configuration = .filled()
+        nextPageButton.configuration?.title = "Next ▶"
+        previousButton.addTarget(self, action: #selector(previousTextPage), for: .touchUpInside)
+        nextPageButton.addTarget(self, action: #selector(nextTextPage), for: .touchUpInside)
+        previousButton.isEnabled = false
+        nextPageButton.isEnabled = false
+        pageCounter.textColor = accent
+        pageCounter.textAlignment = .center
+        pageCounter.font = .monospacedSystemFont(ofSize: 15, weight: .semibold)
+        pageCounter.text = "Send a message to begin"
+        let pager = UIStackView(arrangedSubviews: [previousButton, nextPageButton])
+        pager.axis = .horizontal
+        pager.distribution = .fillEqually
+        pager.spacing = 12
+        pagesButton.setTitle("Open in Presenter for auto-advance →", for: .normal)
+        pagesButton.setTitleColor(accent, for: .normal)
+        pagesButton.titleLabel?.font = .systemFont(ofSize: 15, weight: .semibold)
+        pagesButton.addTarget(self, action: #selector(openPages), for: .touchUpInside)
+        pagesButton.isHidden = true
+        providerChoice.selectedSegmentIndex = OpenLensAIProvider.selected.rawValue
+        providerChoice.selectedSegmentTintColor = accent
+        providerChoice.addTarget(self, action: #selector(providerChanged), for: .valueChanged)
+        providerNote.textColor = .lightGray
+        providerNote.font = .systemFont(ofSize: 13)
+        providerNote.numberOfLines = 0
+        relaySetup.configuration = .borderedProminent()
+        relaySetup.configuration?.title = "Set up AI"
+        relaySetup.addTarget(self, action: #selector(setupRelayPressed), for: .touchUpInside)
+        relayCheck.configuration = .bordered()
+        relayCheck.configuration?.title = "Test AI connection"
+        relayCheck.addTarget(self, action: #selector(testRelayConnection), for: .touchUpInside)
+        relayExplanation.numberOfLines = 0
+        relayExplanation.textColor = .lightGray
+        relayExplanation.font = .systemFont(ofSize: 13)
+        relayExplanation.text = "OpenLens prefers free local AI. Cloud is optional and never used automatically."
+        setupAIUtilities()
+        setupCaptionUtilities()
+        let sizeTitle = UILabel()
+        sizeTitle.text = "TEXT SIZE ON GLASSES"
+        sizeTitle.textColor = accent
+        sizeTitle.font = .systemFont(ofSize: 13, weight: .bold)
+        let relayRow = UIStackView(arrangedSubviews: [relaySetup, relayCheck])
+        relayRow.axis = .horizontal
+        relayRow.distribution = .fillEqually
+        relayRow.spacing = 10
+        let stack = UIStackView(arrangedSubviews: [
+            heading, title, subtitle, segment, inputLabel, field,
+            aiUtilities, providerChoice, providerNote, sizeTitle, fontSelector, fontDetail, send, mic,
+            captionsUtilities, relayExplanation, relayRow,
+            fullResponse, resultUtilities, preview, pageCounter, pager,
+            pagesButton, status
+        ])
+        relaySetup.isHidden = true
+        relayCheck.isHidden = true
+        relayExplanation.isHidden = true
+        providerChoice.isHidden = true
+        providerNote.isHidden = true
         stack.axis = .vertical
         stack.spacing = 17
         stack.translatesAutoresizingMaskIntoConstraints = false
@@ -254,50 +487,184 @@ final class OpenLensHUDViewController: UIViewController, CLLocationManagerDelega
             stack.trailingAnchor.constraint(equalTo: scroll.contentLayoutGuide.trailingAnchor, constant: -20),
             stack.widthAnchor.constraint(equalTo: scroll.frameLayoutGuide.widthAnchor, constant: -40)
         ])
-        draw("OPENLENS / READY", "HELLO FROM OPENLENS")
+        preview.image = OpenLensCanvas.render(lines: ["HELLO"], size: .selected)
+        modeChanged()
+    }
+
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        if fontSelector.selectedSegmentIndex != OpenLensTextSize.selected.rawValue {
+            fontSelector.selectedSegmentIndex = OpenLensTextSize.selected.rawValue
+            updateFontDetail()
+            if !fullMessage.isEmpty {
+                rebuildPages(startAtLatest: fullHeading.contains("CAPTIONS"))
+            }
+        }
     }
 
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
         stopSpeech(submit: false)
+        relayRequestID += 1
+        relayTask?.cancel()
+        relayTask = nil
+        onDeviceAITask?.cancel()
+        onDeviceAITask = nil
+        send.isEnabled = true
     }
 
     @objc private func modeChanged() {
         stopSpeech(submit: false)
         let i = segment.selectedSegmentIndex
-        let labels = ["Your message", "Use iPhone microphone", "Ask AI (needs your HTTPS relay)", "Walking destination"]
-        field.placeholder = labels[i]
-        send.setTitle(i == 3 ? "Find next turn" : i == 2 ? "Ask AI" : "Show on glasses", for: .normal)
-        mic.isHidden = i == 3
-        draw("OPENLENS / " + modes[i], "READY")
+        let labels = ["Your message", "Use iPhone microphone", "Ask AI (needs your HTTPS relay)"]
+        inputLabel.text = labels[i]
+        field.accessibilityLabel = labels[i]
+        send.setTitle(i == 2 ? "Ask AI" : "Show on glasses", for: .normal)
+        mic.isHidden = i == 0
+        aiUtilities.isHidden = i != 2
+        captionsUtilities.isHidden = i != 1
+        relaySetup.isHidden = i != 2
+        relayCheck.isHidden = i != 2
+        relayExplanation.isHidden = i != 2
+        providerChoice.isHidden = i != 2
+        providerNote.isHidden = i != 2
+        fullResponse.isHidden = i != 2 || latestAIResponse.isEmpty
+        resultUtilities.isHidden = i != 2 || latestAIResponse.isEmpty
+        if i == 2 {
+            let labels = ["general": "Ask AI", "explain": "Explain concept",
+                          "summarize": "Summarize text", "rewrite": "Rewrite clearly",
+                          "brainstorm": "Brainstorm ideas"]
+            send.setTitle(labels[aiTask] ?? "Ask AI", for: .normal)
+        }
+        relayRequestID += 1
+        relayTask?.cancel()
+        relayTask = nil
+        onDeviceAITask?.cancel()
+        onDeviceAITask = nil
+        send.isEnabled = true
+        if i == 2 {
+            updateAIProviderUI()
+        }
+        status.text = i == 1 ? "Start listening to show live captions." :
+            i == 2 ? providerNote.text :
+            "Type text to send to the glasses."
     }
 
-    // Reuses the same vendor SDK calls from GraphicsCommandsViewController.
-    // Avoid Unicode in the legacy hardware font; break into short lines.
+    @objc private func providerChanged() {
+        guard let selected = OpenLensAIProvider(rawValue: providerChoice.selectedSegmentIndex) else { return }
+        OpenLensAIProvider.selected = selected
+        relayRequestID += 1
+        relayTask?.cancel()
+        relayTask = nil
+        onDeviceAITask?.cancel()
+        onDeviceAITask = nil
+        send.isEnabled = true
+        updateAIProviderUI()
+        status.text = providerNote.text
+    }
+
+    private func effectiveAIProvider() -> OpenLensAIProvider {
+        let preference = OpenLensAIProvider.selected
+        if preference == .automatic {
+            return OpenLensOnDeviceAI.isReady ? .iphone : .localMac
+        }
+        return preference
+    }
+
+    private func updateAIProviderUI() {
+        providerChoice.selectedSegmentIndex = OpenLensAIProvider.selected.rawValue
+        let chosen = effectiveAIProvider()
+        switch chosen {
+        case .iphone:
+            relaySetup.isHidden = true
+            relayCheck.isHidden = false
+            relayCheck.configuration?.title = "Check iPhone AI"
+            providerNote.text = OpenLensOnDeviceAI.availabilityMessage
+            relayExplanation.text = "Free on-device generation. No Mac, account, API key or cloud request."
+        case .localMac:
+            relaySetup.isHidden = false
+            relayCheck.isHidden = false
+            relaySetup.configuration?.title = "Pair local Mac"
+            relayCheck.configuration?.title = "Test local Mac"
+            let macReady = localMacURL() != nil && loadRelayToken(account: "local-mac-token") != nil
+            providerNote.text = macReady
+                ? "Local Mac paired. Turn on Ollama and keep your iPhone on the same trusted Wi-Fi."
+                : "No on-device AI available yet. Pair free Ollama running on your MacBook Air."
+            relayExplanation.text = "All model inference runs on your Mac. Mac and phone must share a trusted Wi-Fi; it is not an internet service."
+        case .cloudRelay:
+            relaySetup.isHidden = false
+            relayCheck.isHidden = false
+            relaySetup.configuration?.title = "Set up cloud relay"
+            relayCheck.configuration?.title = "Test cloud relay"
+            providerNote.text = "Cloud is explicitly selected; it may require paid credentials."
+            relayExplanation.text = "Optional legacy Cloudflare/OpenAI relay. Automatic mode never selects cloud."
+        case .automatic:
+            break
+        }
+    }
+
+    private func updateFontDetail() {
+        let size = OpenLensTextSize.selected
+        fontDetail.text = "\(size.name) • \(size.fontHeight)px high-contrast image text • \(size.charactersPerLine) chars/line • \(size.linesPerPage) lines/page"
+    }
+
+    @objc private func fontChanged() {
+        guard let size = OpenLensTextSize(rawValue: fontSelector.selectedSegmentIndex) else { return }
+        OpenLensTextSize.selected = size
+        updateFontDetail()
+        if !fullMessage.isEmpty {
+            // Recompute every page for the chosen hardware font, then show page one
+            // (or the latest page for streaming captions). No content is discarded.
+            rebuildPages(startAtLatest: fullHeading.contains("CAPTIONS"))
+        } else {
+            status.text = "\(size.name) selected. Text will use \(size.fontHeight)px characters."
+        }
+    }
+
     private func draw(_ heading: String, _ message: String) {
-        let normalized = message.folding(options: .diacriticInsensitive, locale: Locale(identifier: "en_US"))
-        let safe = normalized.unicodeScalars.map { $0.isASCII ? String($0) : " " }.joined()
-        var lines = [String]()
-        var current = ""
-        for word in safe.split(separator: " ").map(String.init) {
-            if current.count + word.count + 1 > 24 && !current.isEmpty {
-                lines.append(current)
-                current = ""
-            }
-            current += (current.isEmpty ? "" : " ") + String(word.prefix(24))
-            if lines.count == 4 { break }
-        }
-        if !current.isEmpty && lines.count < 5 { lines.append(current) }
-        glasses.clear()
-        glasses.color(level: 15)
-        glasses.txt(x: 8, y: 12, rotation: .bottomRL, font: 2, color: 15, string: String(heading.prefix(27)))
-        glasses.line(x0: 8, x1: 290, y0: 39, y1: 39)
-        for (i, line) in lines.enumerated() {
-            glasses.txt(x: 8, y: 57 + i * 34, rotation: .bottomRL, font: 2, color: 15, string: line)
-        }
-        preview.text = heading + "\n\n" + lines.joined(separator: "\n")
+        fullHeading = heading
+        fullMessage = message
+        rebuildPages(startAtLatest: heading.contains("CAPTIONS"))
         lastUpdate = Date()
-        status.text = "Display commands sent. Confirm on ENGO 3 hardware."
+    }
+
+    private func rebuildPages(startAtLatest: Bool) {
+        visiblePages = OpenLensText.pages(fullMessage, size: .selected)
+        currentPage = startAtLatest ? max(0, visiblePages.count - 1) : 0
+        showCurrentPage()
+    }
+
+    private func showCurrentPage() {
+        guard visiblePages.indices.contains(currentPage) else { return }
+        let lines = visiblePages[currentPage]
+        // Include page numbers in the phone UI rather than fitting an oversized
+        // header on the 304x256 glass.
+        preview.image = OpenLensCanvas.show(glasses, title: fullHeading, lines: lines)
+        pageCounter.text = "PAGE \(currentPage + 1) OF \(visiblePages.count)"
+        previousButton.isEnabled = currentPage > 0
+        nextPageButton.isEnabled = currentPage + 1 < visiblePages.count
+        pagesButton.isHidden = visiblePages.count < 2
+        status.text = visiblePages.count > 1
+            ? "Page \(currentPage + 1)/\(visiblePages.count) queued. Use Previous / Next to see the entire message."
+            : "Text queued for your glasses; confirm it is readable."
+    }
+
+    @objc private func previousTextPage() {
+        guard currentPage > 0 else { return }
+        currentPage -= 1
+        showCurrentPage()
+    }
+
+    @objc private func nextTextPage() {
+        guard currentPage + 1 < visiblePages.count else { return }
+        currentPage += 1
+        showCurrentPage()
+    }
+
+    @objc private func openPages() {
+        guard !fullMessage.isEmpty else { return }
+        let controller = OpenLensPresenterViewController(glasses, title: fullHeading, body: fullMessage)
+        navigationController?.pushViewController(controller, animated: true)
     }
 
     @objc private func sendPressed() {
@@ -306,7 +673,6 @@ final class OpenLensHUDViewController: UIViewController, CLLocationManagerDelega
         if text.isEmpty { status.text = "Enter a message first."; return }
         switch segment.selectedSegmentIndex {
         case 2: askRelay(text)
-        case 3: route(to: text)
         default: draw("OPENLENS / " + modes[segment.selectedSegmentIndex], text)
         }
     }
@@ -343,6 +709,7 @@ final class OpenLensHUDViewController: UIViewController, CLLocationManagerDelega
             try session.setActive(true)
             let node = audioEngine.inputNode
             node.installTap(onBus: 0, bufferSize: 1024, format: node.outputFormat(forBus: 0)) { buffer, _ in req.append(buffer) }
+            speechTapInstalled = true
             audioEngine.prepare()
             try audioEngine.start()
             listening = true
@@ -354,15 +721,30 @@ final class OpenLensHUDViewController: UIViewController, CLLocationManagerDelega
                     if let speech = result?.bestTranscription.formattedString {
                         self.transcript = speech
                         self.field.text = speech
-                        if self.segment.selectedSegmentIndex != 2 && Date().timeIntervalSince(self.lastUpdate) > 1.2 {
+                        if self.segment.selectedSegmentIndex == 1 && Date().timeIntervalSince(self.lastUpdate) > 5.0 {
                             self.draw("OPENLENS / LIVE CAPTIONS", speech)
                         }
                     }
-                    if error != nil { self.stopSpeech(submit: false) }
+                    if result?.isFinal == true {
+                        // Recognition sessions are finite. Keep the last transcript
+                        // readable rather than silently leaving the mic "listening".
+                        self.stopSpeech(submit: false)
+                        self.status.text = "This speech segment ended. Tap Start listening to continue."
+                    } else if error != nil {
+                        self.stopSpeech(submit: false)
+                        self.status.text = "Speech recognition stopped: \(error?.localizedDescription ?? "unknown error"). Tap Start listening to retry."
+                    }
                 }
             }
         } catch {
-            audioEngine.inputNode.removeTap(onBus: 0)
+            if audioEngine.isRunning { audioEngine.stop() }
+            if speechTapInstalled {
+                audioEngine.inputNode.removeTap(onBus: 0)
+                speechTapInstalled = false
+            }
+            req.endAudio()
+            request = nil
+            try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
             status.text = "Microphone: " + error.localizedDescription
         }
     }
@@ -371,7 +753,10 @@ final class OpenLensHUDViewController: UIViewController, CLLocationManagerDelega
         guard listening else { return }
         listening = false
         if audioEngine.isRunning { audioEngine.stop() }
-        audioEngine.inputNode.removeTap(onBus: 0)
+        if speechTapInstalled {
+            audioEngine.inputNode.removeTap(onBus: 0)
+            speechTapInstalled = false
+        }
         request?.endAudio()
         speechTask?.cancel()
         speechTask = nil
@@ -390,31 +775,247 @@ final class OpenLensHUDViewController: UIViewController, CLLocationManagerDelega
         callRelay(mode: "ai", text: question, targetLanguage: "en")
     }
 
-    private func callRelay(mode: String, text: String, targetLanguage: String) {
-        guard let raw = UserDefaults.standard.string(forKey: "openlens.relay"),
-              let url = URL(string: raw), url.scheme == "https" else {
-            status.text = "Set your HTTPS AI relay URL in Settings first."
+    private func relayURL() -> URL? {
+        guard let raw = UserDefaults.standard.string(forKey: "openlens.relay")?
+                .trimmingCharacters(in: .whitespacesAndNewlines),
+              let url = URL(string: raw), url.scheme?.lowercased() == "https",
+              url.host != nil else { return nil }
+        return url
+    }
+
+    @objc private func setupRelayPressed() {
+        switch effectiveAIProvider() {
+        case .localMac: configureLocalMac()
+        case .cloudRelay: configureRelay()
+        case .iphone: status.text = OpenLensOnDeviceAI.availabilityMessage
+        case .automatic: configureLocalMac()
+        }
+    }
+
+    /// Accept only private LAN IP addresses or mDNS hosts; never send the
+    /// local pairing token to a public/internet HTTP endpoint.
+    private func localMacURL() -> URL? {
+        guard let raw = UserDefaults.standard.string(forKey: "openlens.localMacURL"),
+              let url = URL(string: raw.trimmingCharacters(in: .whitespacesAndNewlines)),
+              url.scheme?.lowercased() == "http", let host = url.host,
+              url.user == nil, url.password == nil,
+              url.path == "/openlens", url.port != nil,
+              Self.isPrivateLANHost(host) else { return nil }
+        return url
+    }
+
+    private static func isPrivateLANHost(_ host: String) -> Bool {
+        if host.lowercased().hasSuffix(".local") { return true }
+        let pieces = host.split(separator: ".")
+        guard pieces.count == 4 else { return false }
+        let bytes = pieces.compactMap { Int($0) }
+        guard bytes.count == 4, bytes.allSatisfy({ $0 >= 0 && $0 <= 255 }) else { return false }
+        return bytes[0] == 10 ||
+               (bytes[0] == 192 && bytes[1] == 168) ||
+               (bytes[0] == 172 && (16...31).contains(bytes[1])) ||
+               (bytes[0] == 169 && bytes[1] == 254)
+    }
+
+    private func configureLocalMac() {
+        let alert = UIAlertController(title: "Free AI on your Mac",
+            message: "Run Ollama and OpenLens's local bridge on your MacBook Air. " +
+                     "Enter its private Wi-Fi address and local pairing token. " +
+                     "The Mac must remain on. Use only trusted home Wi-Fi: LAN HTTP is not encrypted.",
+            preferredStyle: .alert)
+        alert.addTextField { field in
+            field.placeholder = "http://192.168.1.25:8765/openlens"
+            field.text = UserDefaults.standard.string(forKey: "openlens.localMacURL")
+            field.keyboardType = .URL
+            field.autocapitalizationType = .none
+            field.autocorrectionType = .no
+        }
+        alert.addTextField { field in
+            field.placeholder = "Local pairing token from Mac Terminal"
+            field.text = self.loadRelayToken(account: "local-mac-token")
+            field.isSecureTextEntry = true
+            field.autocapitalizationType = .none
+            field.autocorrectionType = .no
+        }
+        alert.addAction(UIAlertAction(title: "Save pairing", style: .default) { [weak self] _ in
+            guard let self = self else { return }
+            let entered = alert.textFields?.first?.text?
+                .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            UserDefaults.standard.set(entered, forKey: "openlens.localMacURL")
+            guard self.localMacURL() != nil else {
+                self.status.text = "Use the Mac's private IP or .local address, port, " +
+                    "and /openlens path. For example http://192.168.1.25:8765/openlens"
+                self.updateAIProviderUI()
+                return
+            }
+            let token = alert.textFields?.last?.text?
+                .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            guard token.count >= 32 else {
+                self.status.text = "Use the full pairing token (32+ characters) shown on the Mac."
+                return
+            }
+            self.saveRelayToken(token, account: "local-mac-token")
+            self.updateAIProviderUI()
+            self.status.text = "Local Mac paired. Tap Test local Mac to confirm Ollama is ready."
+        })
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        present(alert, animated: true)
+    }
+
+    private func endpoint(for provider: OpenLensAIProvider) -> (url: URL, token: String)? {
+        switch provider {
+        case .localMac:
+            guard let url = localMacURL(),
+                  let token = loadRelayToken(account: "local-mac-token"),
+                  token.count >= 32 else { return nil }
+            return (url, token)
+        case .cloudRelay:
+            guard let url = relayURL(),
+                  let token = loadRelayToken(), !token.isEmpty else { return nil }
+            return (url, token)
+        default: return nil
+        }
+    }
+
+    @objc private func testRelayConnection() {
+        let provider = effectiveAIProvider()
+        if provider == .iphone {
+            status.text = OpenLensOnDeviceAI.availabilityMessage
             return
         }
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = try? JSONSerialization.data(withJSONObject: ["mode": mode, "text": text, "target_language": targetLanguage])
-        request.timeoutInterval = 25
-        if let token = loadRelayToken() { request.setValue("Bearer " + token, forHTTPHeaderField: "Authorization") }
-        status.text = mode == "translate" ? "Translating text..." : "Waiting for AI response..."
-        URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
+        guard let connection = endpoint(for: provider) else {
+            status.text = provider == .localMac
+                ? "Pair your Mac with its private Wi-Fi URL and token first."
+                : "Set up the optional cloud relay first."
+            setupRelayPressed()
+            return
+        }
+        relayRequestID += 1
+        let id = relayRequestID
+        relayTask?.cancel()
+        let healthURL = connection.url.appendingPathComponent("health")
+        var request = URLRequest(url: healthURL)
+        request.setValue("Bearer " + connection.token, forHTTPHeaderField: "Authorization")
+        request.timeoutInterval = 12
+        status.text = provider == .localMac ? "Checking Ollama on your Mac…" : "Checking cloud relay…"
+        relayTask = URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
             let code = (response as? HTTPURLResponse)?.statusCode ?? 0
-            let json = data.flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }
+            let result = data.flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }
             DispatchQueue.main.async {
-                guard let self = self else { return }
-                if (200..<300).contains(code), let answer = json?["text"] as? String {
-                    self.draw(mode == "translate" ? "OPENLENS / TRANSLATE" : "OPENLENS / AI", answer)
+                guard let self = self, self.relayRequestID == id else { return }
+                if (200..<300).contains(code), result?["status"] as? String == "ok" {
+                    let ready = result?["configured"] as? Bool ?? false
+                    if ready {
+                        self.status.text = provider == .localMac
+                            ? "Local Mac AI is ready. Ask a question to test the model."
+                            : "Cloud relay reports ready. Ask a question to check API access."
+                    } else {
+                        self.status.text = provider == .localMac
+                            ? "Local bridge is online, but the Ollama model is missing. Run ollama pull qwen3:4b-instruct on the Mac."
+                            : "Cloud relay is online but no AI model/API credentials are configured."
+                    }
+                } else if code == 401 {
+                    self.status.text = "Wrong pairing token. Open the setup screen and check it."
                 } else {
-                    self.status.text = error?.localizedDescription ?? "AI relay error (HTTP \(code))."
+                    let issue = error?.localizedDescription ??
+                        "The AI service could not be reached (HTTP \(code))."
+                    self.status.text = issue + (provider == .localMac
+                        ? " Check the Mac is awake, the bridge is running, both devices share Wi-Fi, and Local Network is allowed in iOS Settings."
+                        : " Check your cloud configuration.")
                 }
             }
-        }.resume()
+        }
+        relayTask?.resume()
+    }
+
+    private func displayAIAnswer(_ value: String, mode: String, source: String) {
+        latestAIResponse = value
+        fullResponse.text = value
+        fullResponse.isHidden = false
+        resultUtilities.isHidden = false
+        draw(mode == "translate" ? "OPENLENS / TRANSLATE" : "OPENLENS / AI", value)
+        relayExplanation.text = "\(source) answer ready. Scroll the complete answer on your iPhone or use Next on the glasses."
+    }
+
+    /// Automatic means local-only: Apple iPhone AI first, then the paired Mac.
+    /// Cloud is used exclusively when the user deliberately selects Cloud.
+    private func callRelay(mode: String, text: String, targetLanguage: String) {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { status.text = "Type or dictate something first."; return }
+        guard trimmed.count <= 3000 else {
+            status.text = "Use 3,000 characters or fewer per question."
+            return
+        }
+        let provider = effectiveAIProvider()
+        relayRequestID += 1
+        let id = relayRequestID
+        relayTask?.cancel()
+        relayTask = nil
+        onDeviceAITask?.cancel()
+        onDeviceAITask = nil
+        if provider == .iphone {
+            guard OpenLensOnDeviceAI.isReady else {
+                status.text = OpenLensOnDeviceAI.availabilityMessage
+                return
+            }
+            status.text = mode == "translate"
+                ? "Translating privately on your iPhone…"
+                : "Thinking privately on your iPhone…"
+            send.isEnabled = false
+            onDeviceAITask = OpenLensOnDeviceAI.generate(
+                mode: mode, task: aiTask, text: trimmed,
+                targetLanguage: targetLanguage
+            ) { [weak self] result in
+                guard let self = self, self.relayRequestID == id else { return }
+                self.send.isEnabled = true
+                switch result {
+                case .success(let answer):
+                    self.displayAIAnswer(answer, mode: mode, source: "On-device")
+                case .failure(let error):
+                    self.status.text = "iPhone AI: \(error.localizedDescription)"
+                }
+            }
+            return
+        }
+        guard let connection = endpoint(for: provider) else {
+            status.text = provider == .localMac
+                ? "Local AI needs your Mac. Tap Pair local Mac to connect Ollama. No OpenAI key is needed."
+                : "Set up the optional cloud relay first."
+            return
+        }
+        var request = URLRequest(url: connection.url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("Bearer " + connection.token, forHTTPHeaderField: "Authorization")
+        request.httpBody = try? JSONSerialization.data(withJSONObject: [
+            "mode": mode, "text": trimmed, "target_language": targetLanguage,
+            "task": aiTask
+        ])
+        request.timeoutInterval = provider == .localMac ? 135 : 35
+        status.text = provider == .localMac ? "Mac is running local AI…" : "Asking cloud AI…"
+        send.isEnabled = false
+        relayTask = URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
+            let code = (response as? HTTPURLResponse)?.statusCode ?? 0
+            let result = data.flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }
+            DispatchQueue.main.async {
+                guard let self = self, self.relayRequestID == id else { return }
+                self.send.isEnabled = true
+                if (200..<300).contains(code), let answer = result?["text"] as? String,
+                   !answer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    self.displayAIAnswer(answer, mode: mode,
+                                         source: provider == .localMac ? "Local Mac" : "Cloud")
+                } else {
+                    let detail = (result?["error"] as? String) ?? error?.localizedDescription
+                    if code == 401 {
+                        self.status.text = "Invalid local pairing token. Tap Pair local Mac and check it."
+                    } else if code == 429 {
+                        self.status.text = "The model is busy or rate-limited. Wait and retry."
+                    } else {
+                        self.status.text = detail ?? "AI request failed (HTTP \(code)). Tap Test AI connection."
+                    }
+                }
+            }
+        }
+        relayTask?.resume()
     }
 
     private func route(to destination: String) {
@@ -460,17 +1061,27 @@ final class OpenLensHUDViewController: UIViewController, CLLocationManagerDelega
     }
 
     @objc private func settings() {
-        let menu = UIAlertController(title: "OpenLens Settings", message: "Choose iPhone speech language or set AI relay.", preferredStyle: .actionSheet)
-        for (name, code) in [("English", "en-US"), ("Spanish", "es-ES"), ("French", "fr-FR")] {
+        let menu = UIAlertController(title: "OpenLens Settings", message: "Choose speech language and free local AI options.", preferredStyle: .actionSheet)
+        for (name, code) in [("English", "en-US"), ("Spanish", "es-ES"), ("French", "fr-FR"), ("Hindi", "hi-IN"), ("Telugu", "te-IN")] {
             menu.addAction(UIAlertAction(title: "Speech: " + name, style: .default) { _ in
                 self.stopSpeech(submit: false)
-                self.recognizer = SFSpeechRecognizer(locale: Locale(identifier: code))
-                self.status.text = "Speech language " + name + " (transcription only)."
+                if let recognizer = SFSpeechRecognizer(locale: Locale(identifier: code)) {
+                    self.recognizer = recognizer
+                    self.status.text = "Speech language " + name + " selected. Availability depends on iOS and the installed language."
+                } else {
+                    self.status.text = name + " speech recognition is not available on this iPhone."
+                }
             })
         }
         menu.addAction(UIAlertAction(title: "Translate current transcript", style: .default) { _ in self.translateCurrentText() })
         menu.addAction(UIAlertAction(title: "Translation target language", style: .default) { _ in self.chooseTranslationLanguage() })
+        menu.addAction(UIAlertAction(title: "Pair free AI on my Mac", style: .default) { _ in
+            OpenLensAIProvider.selected = .localMac
+            self.updateAIProviderUI()
+            self.configureLocalMac()
+        })
         menu.addAction(UIAlertAction(title: "Set HTTPS AI relay", style: .default) { _ in self.configureRelay() })
+        menu.addAction(UIAlertAction(title: "Test AI connection", style: .default) { _ in self.testRelayConnection() })
         menu.addAction(UIAlertAction(title: "Cancel", style: .cancel))
         menu.popoverPresentationController?.barButtonItem = navigationItem.rightBarButtonItem
         present(menu, animated: true)
@@ -498,11 +1109,11 @@ final class OpenLensHUDViewController: UIViewController, CLLocationManagerDelega
         callRelay(mode: "translate", text: text, targetLanguage: translationLanguage)
     }
 
-    private func saveRelayToken(_ token: String) {
+    private func saveRelayToken(_ token: String, account: String = "relay-token") {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: "OpenLens-ENGO3",
-            kSecAttrAccount as String: "relay-token"
+            kSecAttrAccount as String: account
         ]
         SecItemDelete(query as CFDictionary)
         if !token.isEmpty, let data = token.data(using: .utf8) {
@@ -512,11 +1123,11 @@ final class OpenLensHUDViewController: UIViewController, CLLocationManagerDelega
         }
     }
 
-    private func loadRelayToken() -> String? {
+    private func loadRelayToken(account: String = "relay-token") -> String? {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: "OpenLens-ENGO3",
-            kSecAttrAccount as String: "relay-token",
+            kSecAttrAccount as String: account,
             kSecMatchLimit as String: kSecMatchLimitOne,
             kSecReturnData as String: true
         ]
@@ -541,13 +1152,22 @@ final class OpenLensHUDViewController: UIViewController, CLLocationManagerDelega
         }
         alert.addAction(UIAlertAction(title: "Save", style: .default) { _ in
             let input = alert.textFields?.first?.text ?? ""
-            if !input.isEmpty && URL(string: input)?.scheme != "https" {
+            let cleaned = input.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !cleaned.isEmpty &&
+                (URL(string: cleaned)?.scheme?.lowercased() != "https" ||
+                 URL(string: cleaned)?.host == nil) {
                 self.status.text = "Use an HTTPS URL."
                 return
             }
-            UserDefaults.standard.set(input, forKey: "openlens.relay")
+            UserDefaults.standard.set(cleaned, forKey: "openlens.relay")
             self.saveRelayToken(alert.textFields?.last?.text ?? "")
-            self.status.text = input.isEmpty ? "AI relay cleared." : "AI relay saved."
+            self.status.text = cleaned.isEmpty
+                ? "AI relay cleared."
+                : "AI relay saved. Now tap Test AI connection."
+            self.relayExplanation.text = cleaned.isEmpty
+                ? "Set up a private relay to enable AI and translation."
+                : "Relay saved. Tap Test AI connection."
+
         })
         alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
         present(alert, animated: true)
