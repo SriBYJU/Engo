@@ -147,6 +147,7 @@ final class OpenLensHomeViewController: UIViewController {
     private let beforeDisconnect: (() -> Void)?
     private var sessionEnded = false
     private let battery = LensUI.label("Reading battery…", size: 14, color: LensUI.muted)
+    private let messageAlertStatus = LensUI.label("", size: 12, color: LensUI.muted)
 
     init(_ glasses: Glasses, beforeDisconnect: (() -> Void)? = nil) {
         self.glasses = glasses
@@ -199,6 +200,7 @@ final class OpenLensHomeViewController: UIViewController {
                 guard let self = self else { return }
                 self.open(OpenLensConnectedAppsViewController(self.glasses))
             })
+        content.addArrangedSubview(messageAlertStatus)
         content.addArrangedSubview(LensUI.section("Everyday tools", detail: "Useful even without an AI subscription."))
         content.addArrangedSubview(LensUI.pair(
             LensUI.tile("Quick cards", subtitle: "Saved reminders", symbol: "rectangle.stack.fill") { [weak self] in
@@ -234,6 +236,36 @@ final class OpenLensHomeViewController: UIViewController {
         })
         content.addArrangedSubview(LensUI.label("AI runs on supported iPhones with Apple Intelligence, or through free Ollama on your Mac. Cloud is optional and never chosen automatically. Device controls depend on firmware support.", size: 12, color: LensUI.muted))
         updateBattery()
+        NotificationCenter.default.addObserver(self, selector: #selector(handleForwardedAlert),
+            name: OpenLensIncomingAlertStore.notificationName, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(handleForwardedAlert),
+            name: UIApplication.didBecomeActiveNotification, object: nil)
+        updateMessageAlertStatus()
+    }
+
+    deinit { NotificationCenter.default.removeObserver(self) }
+
+    private func updateMessageAlertStatus() {
+        let count = OpenLensIncomingAlertStore.load().count
+        messageAlertStatus.text = OpenLensIncomingAlertStore.enabled
+            ? "Shortcuts message alerts enabled • \(count) saved. Open Connected Apps to manage."
+            : "Message notifications: opt-in via Connected Apps → Message Alerts (Shortcuts)."
+    }
+
+    @objc private func handleForwardedAlert() {
+        updateMessageAlertStatus()
+        showNewestMessageAlertIfReady()
+    }
+
+    private func showNewestMessageAlertIfReady() {
+        // Do not interrupt an open photo, map, OCR, presenter or text screen.
+        guard isViewLoaded, view.window != nil,
+              navigationController?.topViewController === self,
+              !sessionEnded,
+              let item = OpenLensIncomingAlertStore.nextUndisplayed() else { return }
+        OpenLensCanvas.show(glasses, title: "MESSAGE ALERT", message: item.glassesText)
+        OpenLensIncomingAlertStore.markDisplayed(item)
+        messageAlertStatus.text = "Queued alert from \(item.sender). Open Connected Apps for all pages."
     }
 
     private func open(_ screen: UIViewController) {
@@ -246,7 +278,15 @@ final class OpenLensHomeViewController: UIViewController {
             DispatchQueue.main.async { self?.battery.text = "Battery  \(percent)%" }
         }
     }
-    override func viewWillAppear(_ animated: Bool) { super.viewWillAppear(animated); updateBattery() }
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        updateBattery()
+        updateMessageAlertStatus()
+    }
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        showNewestMessageAlertIfReady()
+    }
     override func viewDidDisappear(_ animated: Bool) {
         super.viewDidDisappear(animated)
         if navigationController?.viewControllers.contains(self) == false { endSession() }
